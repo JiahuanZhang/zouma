@@ -1,0 +1,33 @@
+{
+  "name": "zouma",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "ZouMa 全栈项目 - Vue3 + Express + SQLite",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:frontend": "npm run dev -w packages/frontend",
+    "dev:backend": "npm run dev -w packages/backend",
+    "build:common": "npm run build -w packages/common",
+    "build:frontend": "npm run build -w packages/frontend",
+    "build:backend": "npm run build -w packages/backend",
+    "build": "npm run build:common && npm run build:frontend && npm run build:backend",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"packages/**/*.{ts,vue,json,css,scss}\""
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^10.0.0",
+    "eslint-plugin-vue": "^9.0.0",
+    "typescript-eslint": "^8.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "~5.9.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
