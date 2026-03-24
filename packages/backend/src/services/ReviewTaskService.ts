@@ -93,4 +93,18 @@ export class ReviewTaskService {
     const result = db.prepare('DELETE FROM review_task WHERE id = ?').run(id);
     return result.changes > 0;
   }
+
+  static execute(id: number): ReviewTaskWithRelations | undefined {
+    const db = DatabaseManager.getDatabase();
+    const existing = db
+      .prepare('SELECT * FROM review_task WHERE id = ?')
+      .get(id) as ReviewTask | undefined;
+    if (!existing) return undefined;
+
+    db.prepare(
+      `UPDATE review_task SET status = 'pending', result = NULL, updated_at = datetime('now') WHERE id = ?`
+    ).run(id);
+
+    return ReviewTaskService.findById(id);
+  }
 }

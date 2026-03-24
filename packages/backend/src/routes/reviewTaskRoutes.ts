@@ -6,5 +6,6 @@ export const reviewTaskRouter = Router();
 reviewTaskRouter.get('/', ReviewTaskController.getAll);
 reviewTaskRouter.get('/:id', ReviewTaskController.getById);
 reviewTaskRouter.post('/', ReviewTaskController.create);
+reviewTaskRouter.post('/:id/execute', ReviewTaskController.execute);
 reviewTaskRouter.put('/:id', ReviewTaskController.update);
 reviewTaskRouter.delete('/:id', ReviewTaskController.remove);

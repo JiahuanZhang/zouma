@@ -77,4 +77,18 @@ export class ReviewTaskController {
     }
     res.json(ResponseHelper.success(null, '删除成功'));
   }
+
+  static execute(req: Request, res: Response): void {
+    const id = Number(req.params.id);
+    if (!Validator.isPositiveInteger(id)) {
+      res.status(400).json(ResponseHelper.error('无效的 ID', 400));
+      return;
+    }
+    const item = ReviewTaskService.execute(id);
+    if (!item) {
+      res.status(404).json(ResponseHelper.error('未找到记录', 404));
+      return;
+    }
+    res.json(ResponseHelper.success(item, '已提交执行'));
+  }
 }

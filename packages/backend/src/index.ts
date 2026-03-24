@@ -4,6 +4,7 @@ import cors from 'cors';
 import { apiRouter } from './routes/index.js';
 import { ErrorHandler } from './middleware/errorHandler.js';
 import { DatabaseManager } from './database/index.js';
+import { initializeDatabase } from './database/index.js';
 
 class App {
   private app = express();
@@ -22,7 +23,7 @@ class App {
     this.app.use('/api', apiRouter);
     this.app.use(ErrorHandler.handle);
 
-    DatabaseManager.initialize();
+    initializeDatabase();
   }
 
   start(): void {
