@@ -3,6 +3,7 @@
   "references": [
     { "path": "packages/common" },
     { "path": "packages/backend" },
-    { "path": "packages/frontend" }
+    { "path": "packages/frontend" },
+    { "path": "packages/executor" }
   ]
 }

@@ -45,19 +45,20 @@ export class ReviewTaskService {
       .get(id) as ReviewTaskWithRelations | undefined;
   }
 
-  static create(dto: CreateReviewTaskDTO): ReviewTask {
+  static create(dto: CreateReviewTaskDTO, planId?: number): ReviewTask {
     const db = DatabaseManager.getDatabase();
     const result = db
       .prepare(
-        `INSERT INTO review_task (name, repo_id, llm_config_id, target_branch, file_patterns)
-         VALUES (?, ?, ?, ?, ?)`
+        `INSERT INTO review_task (name, repo_id, llm_config_id, target_branch, file_patterns, plan_id)
+         VALUES (?, ?, ?, ?, ?, ?)`
       )
       .run(
         dto.name,
         dto.repo_id,
         dto.llm_config_id,
         dto.target_branch ?? null,
-        dto.file_patterns ?? null
+        dto.file_patterns ?? null,
+        planId ?? null
       );
     return ReviewTaskService.findById(Number(result.lastInsertRowid))!;
   }

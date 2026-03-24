@@ -5,6 +5,7 @@ import { apiRouter } from './routes/index.js';
 import { ErrorHandler } from './middleware/errorHandler.js';
 import { DatabaseManager } from './database/index.js';
 import { initializeDatabase } from './database/index.js';
+import { PlanScheduler } from './services/PlanScheduler.js';
 
 class App {
   private app = express();
@@ -31,7 +32,10 @@ class App {
       console.log(`[Server] Running at http://localhost:${this.port}`);
     });
 
+    PlanScheduler.start();
+
     process.on('SIGINT', () => {
+      PlanScheduler.stop();
       DatabaseManager.close();
       process.exit(0);
     });

@@ -105,6 +105,66 @@ export interface ModelInfo {
   owned_by?: string;
 }
 
+// ========== Review Plan ==========
+
+export type ReviewPlanTriggerType = 'interval' | 'daily' | 'webhook';
+
+export interface IntervalTriggerConfig {
+  interval_hours: number;
+}
+
+export interface DailyTriggerConfig {
+  time: string; // HH:mm
+}
+
+export interface WebhookTriggerConfig {
+  secret?: string;
+}
+
+export type TriggerConfig = IntervalTriggerConfig | DailyTriggerConfig | WebhookTriggerConfig;
+
+export interface ReviewPlan {
+  id: number;
+  name: string;
+  repo_id: number;
+  llm_config_id: number;
+  target_branch: string | null;
+  file_patterns: string | null;
+  trigger_type: ReviewPlanTriggerType;
+  trigger_config: TriggerConfig;
+  enabled: number;
+  last_triggered_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReviewPlanWithRelations extends ReviewPlan {
+  repo_name: string;
+  llm_config_name: string;
+}
+
+export interface CreateReviewPlanDTO {
+  name: string;
+  repo_id: number;
+  llm_config_id: number;
+  target_branch?: string;
+  file_patterns?: string;
+  trigger_type: ReviewPlanTriggerType;
+  trigger_config: TriggerConfig;
+  enabled?: number;
+}
+
+export interface UpdateReviewPlanDTO {
+  name?: string;
+  repo_id?: number;
+  llm_config_id?: number;
+  target_branch?: string;
+  file_patterns?: string;
+  trigger_type?: ReviewPlanTriggerType;
+  trigger_config?: TriggerConfig;
+  enabled?: number;
+}
+
 // ========== Review Task ==========
 
 export type ReviewTaskStatus = 'pending' | 'running' | 'completed' | 'failed';
@@ -116,6 +176,7 @@ export interface ReviewTask {
   llm_config_id: number;
   target_branch: string | null;
   file_patterns: string | null;
+  plan_id: number | null;
   status: ReviewTaskStatus;
   result: string | null;
   created_at: string;

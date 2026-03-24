@@ -29,6 +29,10 @@ const appStore = useAppStore();
           <el-icon><i class="el-icon-setting" /></el-icon>
           <span>LLM 配置管理</span>
         </el-menu-item>
+        <el-menu-item index="/review-plans">
+          <el-icon><i class="el-icon-calendar" /></el-icon>
+          <span>评审计划管理</span>
+        </el-menu-item>
         <el-menu-item index="/review-tasks">
           <el-icon><i class="el-icon-document" /></el-icon>
           <span>评审任务管理</span>
