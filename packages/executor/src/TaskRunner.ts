@@ -1,5 +1,8 @@
 import type { ReviewTask } from '@zouma/common';
 import { DatabaseManager } from '@zouma/common';
+import { buildFromDB, preflightLlmCheck } from './configAdapter.js';
+import { createDbLogger } from './dbLogger.js';
+import { runReview } from './core/orchestrate.js';
 
 export class TaskRunner {
   private running = false;
@@ -13,6 +16,10 @@ export class TaskRunner {
     console.log(`[TaskRunner] 接收任务 #${task.id}: ${task.name}`);
 
     try {
+      console.log(`[TaskRunner] 预检 LLM API 连通性...`);
+      await preflightLlmCheck(task);
+      console.log(`[TaskRunner] LLM API 预检通过`);
+
       this.updateStatus(task.id, 'running');
       console.log(`[TaskRunner] 开始执行任务 #${task.id}`);
 
@@ -29,12 +36,22 @@ export class TaskRunner {
     }
   }
 
-  /**
-   * 具体评审执行逻辑 — placeholder，后续填充
-   */
-  private async executeReview(_task: ReviewTask): Promise<string> {
-    // TODO: 实现具体的评审逻辑（Git操作、LLM调用等）
-    return 'review completed (placeholder)';
+  private async executeReview(task: ReviewTask): Promise<string> {
+    const { appConfig, reviewOptions } = buildFromDB(task);
+    const logger = createDbLogger(task.id);
+
+    logger.info(`评审启动 | 目标: ${reviewOptions.targetPath} | 模型: ${appConfig.model}`);
+
+    const startTime = Date.now();
+    const result = await runReview(reviewOptions, appConfig, logger);
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
+    logger.info(
+      `评审完成 | 耗时: ${elapsed}s | 文件: ${result.totalFiles} | 问题: ${result.report.issues.length}`
+    );
+    await logger.flush();
+
+    return JSON.stringify(result.report);
   }
 
   private updateStatus(taskId: number, status: string, result?: string): void {

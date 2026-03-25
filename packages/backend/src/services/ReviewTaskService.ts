@@ -4,18 +4,9 @@ import type {
   CreateReviewTaskDTO,
   UpdateReviewTaskDTO,
   PaginationParams,
+  ReviewLog,
 } from '@zouma/common';
 import { DatabaseManager } from '../database/index.js';
-
-const SELECT_WITH_RELATIONS = `
-  SELECT
-    t.*,
-    r.name as repo_name,
-    l.name as llm_config_name
-  FROM review_task t
-  LEFT JOIN git_repo r ON t.repo_id = r.id
-  LEFT JOIN llm_config l ON t.llm_config_id = l.id
-`;
 
 export class ReviewTaskService {
   static findAll(params?: PaginationParams): { items: ReviewTaskWithRelations[]; total: number } {
@@ -27,13 +18,13 @@ export class ReviewTaskService {
     if (params) {
       const offset = (params.page - 1) * params.pageSize;
       const items = db
-        .prepare(`${SELECT_WITH_RELATIONS} ORDER BY t.id DESC LIMIT ? OFFSET ?`)
+        .prepare('SELECT * FROM review_task ORDER BY id DESC LIMIT ? OFFSET ?')
         .all(params.pageSize, offset) as ReviewTaskWithRelations[];
       return { items, total };
     }
 
     const items = db
-      .prepare(`${SELECT_WITH_RELATIONS} ORDER BY t.id DESC`)
+      .prepare('SELECT * FROM review_task ORDER BY id DESC')
       .all() as ReviewTaskWithRelations[];
     return { items, total };
   }
@@ -41,16 +32,19 @@ export class ReviewTaskService {
   static findById(id: number): ReviewTaskWithRelations | undefined {
     const db = DatabaseManager.getDatabase();
     return db
-      .prepare(`${SELECT_WITH_RELATIONS} WHERE t.id = ?`)
+      .prepare('SELECT * FROM review_task WHERE id = ?')
       .get(id) as ReviewTaskWithRelations | undefined;
   }
 
-  static create(dto: CreateReviewTaskDTO, planId?: number): ReviewTask {
+  static create(dto: CreateReviewTaskDTO, snapshot?: { planId?: number; planName?: string }): ReviewTask {
     const db = DatabaseManager.getDatabase();
+    const repoRow = db.prepare('SELECT name FROM git_repo WHERE id = ?').get(dto.repo_id) as { name: string } | undefined;
+    const llmRow = db.prepare('SELECT name FROM llm_config WHERE id = ?').get(dto.llm_config_id) as { name: string } | undefined;
+
     const result = db
       .prepare(
-        `INSERT INTO review_task (name, repo_id, llm_config_id, target_branch, file_patterns, plan_id)
-         VALUES (?, ?, ?, ?, ?, ?)`
+        `INSERT INTO review_task (name, repo_id, llm_config_id, target_branch, file_patterns, plan_id, plan_name, repo_name, llm_config_name)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         dto.name,
@@ -58,7 +52,10 @@ export class ReviewTaskService {
         dto.llm_config_id,
         dto.target_branch ?? null,
         dto.file_patterns ?? null,
-        planId ?? null
+        snapshot?.planId ?? null,
+        snapshot?.planName ?? null,
+        repoRow?.name ?? null,
+        llmRow?.name ?? null
       );
     return ReviewTaskService.findById(Number(result.lastInsertRowid))!;
   }
@@ -93,6 +90,13 @@ export class ReviewTaskService {
     const db = DatabaseManager.getDatabase();
     const result = db.prepare('DELETE FROM review_task WHERE id = ?').run(id);
     return result.changes > 0;
+  }
+
+  static findLogsByTaskId(taskId: number): ReviewLog[] {
+    const db = DatabaseManager.getDatabase();
+    return db
+      .prepare('SELECT * FROM review_log WHERE task_id = ? ORDER BY id ASC')
+      .all(taskId) as ReviewLog[];
   }
 
   static execute(id: number): ReviewTaskWithRelations | undefined {

@@ -1,4 +1,4 @@
-import type { LlmConfig, CreateLlmConfigDTO, UpdateLlmConfigDTO, PaginatedResult, FetchModelsDTO, ModelInfo } from '@zouma/common';
+import type { LlmConfig, CreateLlmConfigDTO, UpdateLlmConfigDTO, PaginatedResult, FetchModelsDTO, ModelInfo, LlmTestResult } from '@zouma/common';
 import { http } from './http';
 
 const BASE = '/llm-configs';
@@ -24,5 +24,8 @@ export const llmConfigApi = {
   },
   fetchModels(dto: FetchModelsDTO) {
     return http.post<ModelInfo[]>(`${BASE}/models`, dto);
+  },
+  testConnection(id: number) {
+    return http.post<LlmTestResult>(`${BASE}/${id}/test`);
   },
 };

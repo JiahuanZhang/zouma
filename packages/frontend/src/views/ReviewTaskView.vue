@@ -7,6 +7,7 @@ import type {
   CreateReviewTaskDTO,
   GitRepo,
   LlmConfig,
+  ReviewLog,
 } from '@zouma/common';
 import { reviewTaskApi } from '@/api/reviewTask';
 import { gitRepoApi } from '@/api/gitRepo';
@@ -26,8 +27,10 @@ const dialogTitle = ref('');
 const editingId = ref<number | null>(null);
 const formRef = ref<FormInstance>();
 
-const resultDialogVisible = ref(false);
-const resultContent = ref('');
+const logDialogVisible = ref(false);
+const logList = ref<ReviewLog[]>([]);
+const logLoading = ref(false);
+const logTaskName = ref('');
 
 const defaultForm = (): CreateReviewTaskDTO => ({
   name: '',
@@ -52,6 +55,16 @@ const statusMap: Record<string, { label: string; type: string }> = {
   running: { label: '执行中', type: 'warning' },
   completed: { label: '已完成', type: 'success' },
   failed: { label: '失败', type: 'danger' },
+};
+
+const logLevelType = (level: string): 'info' | 'success' | 'warning' | 'danger' => {
+  const map: Record<string, 'info' | 'success' | 'warning' | 'danger'> = {
+    debug: 'info',
+    info: 'success',
+    warn: 'warning',
+    error: 'danger',
+  };
+  return map[level] ?? 'info';
 };
 
 async function fetchData() {
@@ -121,9 +134,19 @@ async function handleDelete(row: ReviewTaskWithRelations) {
   fetchData();
 }
 
-function handleViewResult(row: ReviewTaskWithRelations) {
-  resultContent.value = row.result ?? '暂无执行结果';
-  resultDialogVisible.value = true;
+async function handleViewLogs(row: ReviewTaskWithRelations) {
+  logTaskName.value = row.name;
+  logDialogVisible.value = true;
+  logLoading.value = true;
+  try {
+    const res = await reviewTaskApi.getLogs(row.id);
+    logList.value = res.data;
+  } catch {
+    logList.value = [];
+    ElMessage.error('获取日志失败');
+  } finally {
+    logLoading.value = false;
+  }
 }
 
 function handlePageChange(val: number) {
@@ -166,7 +189,7 @@ onMounted(() => {
       <el-table-column prop="created_at" label="创建时间" width="170" />
       <el-table-column label="操作" width="210" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" @click="handleViewResult(row)">结果</el-button>
+          <el-button size="small" @click="handleViewLogs(row)">结果</el-button>
           <el-button size="small" @click="handleEdit(row)">编辑</el-button>
           <el-button size="small" type="danger" @click="handleDelete(row)">删除</el-button>
         </template>
@@ -222,10 +245,25 @@ onMounted(() => {
       </template>
     </el-dialog>
 
-    <el-dialog v-model="resultDialogVisible" title="执行结果" width="650px">
-      <pre class="result-content">{{ resultContent }}</pre>
+    <el-dialog v-model="logDialogVisible" :title="`执行日志 - ${logTaskName}`" width="800px">
+      <el-table v-loading="logLoading" :data="logList" stripe border max-height="500px" size="small">
+        <el-table-column prop="id" label="ID" width="60" />
+        <el-table-column label="级别" width="80" align="center">
+          <template #default="{ row }">
+            <el-tag
+              :type="logLevelType(row.level)"
+              size="small"
+              effect="plain"
+            >{{ row.level }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="message" label="消息" min-width="250" show-overflow-tooltip />
+        <el-table-column prop="detail" label="详情" min-width="180" show-overflow-tooltip />
+        <el-table-column prop="created_at" label="时间" width="170" />
+      </el-table>
+      <div v-if="!logLoading && logList.length === 0" class="log-empty">暂无执行日志</div>
       <template #footer>
-        <el-button @click="resultDialogVisible = false">关闭</el-button>
+        <el-button @click="logDialogVisible = false">关闭</el-button>
       </template>
     </el-dialog>
   </div>
@@ -255,15 +293,10 @@ onMounted(() => {
   justify-content: flex-end;
 }
 
-.result-content {
-  white-space: pre-wrap;
-  word-break: break-all;
-  max-height: 400px;
-  overflow-y: auto;
-  background: #f5f7fa;
-  padding: 12px;
-  border-radius: 4px;
-  font-size: 13px;
-  line-height: 1.6;
+.log-empty {
+  text-align: center;
+  color: #909399;
+  padding: 24px 0;
+  font-size: 14px;
 }
 </style>

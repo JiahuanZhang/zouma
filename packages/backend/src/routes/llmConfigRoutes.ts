@@ -7,5 +7,6 @@ llmConfigRouter.get('/', LlmConfigController.getAll);
 llmConfigRouter.get('/:id', LlmConfigController.getById);
 llmConfigRouter.post('/', LlmConfigController.create);
 llmConfigRouter.post('/models', LlmConfigController.fetchModels);
+llmConfigRouter.post('/:id/test', LlmConfigController.testConnection);
 llmConfigRouter.put('/:id', LlmConfigController.update);
 llmConfigRouter.delete('/:id', LlmConfigController.remove);

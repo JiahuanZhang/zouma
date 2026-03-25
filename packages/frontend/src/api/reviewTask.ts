@@ -3,6 +3,7 @@ import type {
   CreateReviewTaskDTO,
   UpdateReviewTaskDTO,
   PaginatedResult,
+  ReviewLog,
 } from '@zouma/common';
 import { http } from './http';
 
@@ -28,5 +29,8 @@ export const reviewTaskApi = {
   },
   remove(id: number) {
     return http.delete(`${BASE}/${id}`);
+  },
+  getLogs(taskId: number) {
+    return http.get<ReviewLog[]>(`${BASE}/${taskId}/logs`);
   },
 };

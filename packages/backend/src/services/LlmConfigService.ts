@@ -1,12 +1,13 @@
-import type { LlmConfig, CreateLlmConfigDTO, UpdateLlmConfigDTO, PaginationParams, FetchModelsDTO, ModelInfo } from '@zouma/common';
+import type {
+  LlmConfig,
+  CreateLlmConfigDTO,
+  UpdateLlmConfigDTO,
+  PaginationParams,
+  FetchModelsDTO,
+  ModelInfo,
+} from '@zouma/common';
+import { resolveBaseUrl, testLlmConnection, isAnthropicProvider } from '@zouma/common';
 import { DatabaseManager } from '../database/index.js';
-
-const PROVIDER_BASE_URLS: Record<string, string> = {
-  openai: 'https://api.openai.com/v1',
-  anthropic: 'https://api.anthropic.com/v1',
-  deepseek: 'https://api.deepseek.com/v1',
-  qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-};
 
 export class LlmConfigService {
   static findAll(params?: PaginationParams): { items: LlmConfig[]; total: number } {
@@ -82,13 +83,26 @@ export class LlmConfigService {
     return result.changes > 0;
   }
 
-  static async fetchModels(dto: FetchModelsDTO): Promise<ModelInfo[]> {
-    const baseUrl = dto.base_url?.replace(/\/+$/, '')
-      || PROVIDER_BASE_URLS[(dto.provider ?? '').toLowerCase()]
-      || 'https://api.openai.com/v1';
+  static async testConnection(config: LlmConfig) {
+    return testLlmConnection(config);
+  }
 
+  static async fetchModels(dto: FetchModelsDTO): Promise<ModelInfo[]> {
+    const provider = dto.provider ?? '';
+    const baseUrl = resolveBaseUrl(provider, dto.base_url);
+
+    if (isAnthropicProvider(provider, dto.base_url)) {
+      return LlmConfigService.fetchAnthropicModels(baseUrl, dto.api_key);
+    }
+    return LlmConfigService.fetchOpenAICompatibleModels(baseUrl, dto.api_key);
+  }
+
+  private static async fetchOpenAICompatibleModels(
+    baseUrl: string,
+    apiKey: string
+  ): Promise<ModelInfo[]> {
     const res = await fetch(`${baseUrl}/models`, {
-      headers: { Authorization: `Bearer ${dto.api_key}` },
+      headers: { Authorization: `Bearer ${apiKey}` },
     });
 
     if (!res.ok) {
@@ -98,6 +112,31 @@ export class LlmConfigService {
 
     const json = (await res.json()) as { data?: { id: string; owned_by?: string }[] };
     const models = (json.data ?? []).map((m) => ({ id: m.id, owned_by: m.owned_by }));
+    models.sort((a, b) => a.id.localeCompare(b.id));
+    return models;
+  }
+
+  private static async fetchAnthropicModels(
+    baseUrl: string,
+    apiKey: string
+  ): Promise<ModelInfo[]> {
+    const res = await fetch(`${baseUrl}/v1/models`, {
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`获取 Anthropic 模型列表失败 (${res.status}): ${text.slice(0, 200)}`);
+    }
+
+    const json = (await res.json()) as { data?: { id: string; display_name?: string }[] };
+    const models = (json.data ?? []).map((m) => ({
+      id: m.id,
+      owned_by: 'anthropic',
+    }));
     models.sort((a, b) => a.id.localeCompare(b.id));
     return models;
   }

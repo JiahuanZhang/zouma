@@ -105,6 +105,12 @@ export interface ModelInfo {
   owned_by?: string;
 }
 
+export interface LlmTestResult {
+  ok: boolean;
+  message: string;
+  latencyMs: number;
+}
+
 // ========== Review Plan ==========
 
 export type ReviewPlanTriggerType = 'interval' | 'daily' | 'webhook';
@@ -177,16 +183,16 @@ export interface ReviewTask {
   target_branch: string | null;
   file_patterns: string | null;
   plan_id: number | null;
+  plan_name: string | null;
+  repo_name: string | null;
+  llm_config_name: string | null;
   status: ReviewTaskStatus;
   result: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export interface ReviewTaskWithRelations extends ReviewTask {
-  repo_name: string;
-  llm_config_name: string;
-}
+export type ReviewTaskWithRelations = ReviewTask;
 
 export interface CreateReviewTaskDTO {
   name: string;
@@ -204,4 +210,17 @@ export interface UpdateReviewTaskDTO {
   file_patterns?: string;
   status?: ReviewTaskStatus;
   result?: string;
+}
+
+// ========== Review Log ==========
+
+export type ReviewLogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+export interface ReviewLog {
+  id: number;
+  task_id: number;
+  level: ReviewLogLevel;
+  message: string;
+  detail: string | null;
+  created_at: string;
 }

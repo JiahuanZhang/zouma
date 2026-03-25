@@ -131,7 +131,7 @@ export class ReviewPlanService {
       llm_config_id: plan.llm_config_id,
       target_branch: plan.target_branch ?? undefined,
       file_patterns: plan.file_patterns ?? undefined,
-    }, plan.id);
+    }, { planId: plan.id, planName: plan.name });
 
     db.prepare(
       `UPDATE review_plan SET last_triggered_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`

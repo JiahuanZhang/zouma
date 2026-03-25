@@ -82,6 +82,26 @@ export class LlmConfigController {
     res.json(ResponseHelper.success(null, '删除成功'));
   }
 
+  static async testConnection(req: Request, res: Response): Promise<void> {
+    const id = Number(req.params.id);
+    if (!Validator.isPositiveInteger(id)) {
+      res.status(400).json(ResponseHelper.error('无效的 ID', 400));
+      return;
+    }
+    const config = LlmConfigService.findById(id);
+    if (!config) {
+      res.status(404).json(ResponseHelper.error('未找到记录', 404));
+      return;
+    }
+    try {
+      const result = await LlmConfigService.testConnection(config);
+      res.json(ResponseHelper.success(result));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '测试连接失败';
+      res.status(502).json(ResponseHelper.error(msg, 502));
+    }
+  }
+
   static async fetchModels(req: Request, res: Response): Promise<void> {
     const dto = req.body as FetchModelsDTO;
     if (!Validator.isNonEmptyString(dto.api_key)) {

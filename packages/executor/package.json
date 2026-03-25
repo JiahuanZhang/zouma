@@ -1,6 +1,7 @@
 {
   "name": "@zouma/executor",
-  "version": "1.0.0",
+  "version": "2.0.0",
+  "description": "ZouMa 评审任务执行器 — 轮询数据库 + 多智能体代码评审引擎",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
@@ -10,9 +11,13 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.81",
+    "@zouma/common": "*",
     "better-sqlite3": "^11.8.0",
     "dotenv": "^16.4.0",
-    "@zouma/common": "*"
+    "glob": "^11.0.0",
+    "p-limit": "^6.2.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0",
