@@ -59,13 +59,15 @@ async function runReviewSimple(
       logger.info(`[批次 ${idx + 1}/${batches.length}] 开始评审 ${batch.length} 个文件...`);
       const t0 = Date.now();
       const result = await reviewBatch(batch, options, config, logger);
+      const safe = ensureReport(result);
       const sec = ((Date.now() - t0) / 1000).toFixed(1);
-      logger.info(`[批次 ${idx + 1}/${batches.length}] 完成 (${sec}s, issues=${result.issues.length})`);
-      return result;
+      logger.info(`[批次 ${idx + 1}/${batches.length}] 完成 (${sec}s, issues=${safe.issues.length})`);
+      return safe;
     }),
   );
 
-  const reports = await Promise.all(tasks);
+  const settled = await Promise.allSettled(tasks);
+  const reports = collectSettled(settled, "批次", logger);
   const merged = mergeReports(reports);
 
   saveIfGit(options, files, logger);
@@ -105,13 +107,15 @@ async function runReviewSmart(
       logger.info(`[快扫 ${idx + 1}/${groups.length}] ${group.length} 文件`);
       const t0 = Date.now();
       const r = await quickScanBatch(group, options, config, logger, context, quickBudget);
+      const safe = ensureReport(r);
       const sec = ((Date.now() - t0) / 1000).toFixed(1);
-      logger.info(`[快扫 ${idx + 1}/${groups.length}] 完成 (${sec}s, issues=${r.issues.length})`);
-      return r;
+      logger.info(`[快扫 ${idx + 1}/${groups.length}] 完成 (${sec}s, issues=${safe.issues.length})`);
+      return safe;
     }),
   );
-  const quickReports = await Promise.all(quickTasks);
-  const quickIssues = quickReports.flatMap((r) => r.issues);
+  const quickReports = await Promise.allSettled(quickTasks);
+  const settledQuickReports = collectSettled(quickReports, "快扫", logger);
+  const quickIssues = settledQuickReports.flatMap((r) => r.issues);
   logger.info(`快速扫描完成: ${quickIssues.length} 个严重问题`);
 
   logger.info(`── 阶段 2: 深度评审 (${groups.length} 组, 并发 ${concurrency}) ──`);
@@ -123,14 +127,16 @@ async function runReviewSmart(
       logger.info(`[深审 ${idx + 1}/${groups.length}] ${group.length} 文件`);
       const t0 = Date.now();
       const r = await reviewBatch(group, options, config, logger, enrichedContext, deepBudget);
+      const safe = ensureReport(r);
       const sec = ((Date.now() - t0) / 1000).toFixed(1);
-      logger.info(`[深审 ${idx + 1}/${groups.length}] 完成 (${sec}s, issues=${r.issues.length})`);
-      return r;
+      logger.info(`[深审 ${idx + 1}/${groups.length}] 完成 (${sec}s, issues=${safe.issues.length})`);
+      return safe;
     }),
   );
-  const deepReports = await Promise.all(deepTasks);
+  const deepReports = await Promise.allSettled(deepTasks);
+  const settledDeepReports = collectSettled(deepReports, "深审", logger);
 
-  const merged = smartMergeReports(quickReports, deepReports);
+  const merged = smartMergeReports(settledQuickReports, settledDeepReports);
 
   saveIfGit(options, files, logger);
 
@@ -144,6 +150,32 @@ async function runReviewSmart(
 }
 
 // ---------- Helpers ----------
+
+function ensureReport(r: ReviewReport): ReviewReport {
+  return {
+    summary: r?.summary ?? "评审未返回有效结果",
+    issues: Array.isArray(r?.issues) ? r.issues : [],
+    score: r?.score ?? { style: 0, logic: 0, robustness: 0, overall: 0 },
+  };
+}
+
+function collectSettled(
+  results: PromiseSettledResult<ReviewReport>[],
+  label: string,
+  logger: ReviewLogger,
+): ReviewReport[] {
+  const reports: ReviewReport[] = [];
+  for (const [i, r] of results.entries()) {
+    if (r.status === "fulfilled") {
+      reports.push(r.value);
+    } else {
+      const msg = r.reason instanceof Error ? r.reason.message : String(r.reason);
+      logger.error(`[${label} ${i + 1}] 异常: ${msg}`);
+      reports.push(ensureReport(undefined as unknown as ReviewReport));
+    }
+  }
+  return reports;
+}
 
 function enrichContext(baseContext: string, quickIssues: ReviewIssue[]): string {
   if (quickIssues.length === 0) return baseContext;

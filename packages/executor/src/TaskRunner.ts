@@ -15,6 +15,8 @@ export class TaskRunner {
     this.running = true;
     console.log(`[TaskRunner] 接收任务 #${task.id}: ${task.name}`);
 
+    const logger = createDbLogger(task.id);
+
     try {
       console.log(`[TaskRunner] 预检 LLM API 连通性...`);
       await preflightLlmCheck(task);
@@ -23,22 +25,24 @@ export class TaskRunner {
       this.updateStatus(task.id, 'running');
       console.log(`[TaskRunner] 开始执行任务 #${task.id}`);
 
-      const result = await this.executeReview(task);
+      const result = await this.executeReview(task, logger);
 
       this.updateStatus(task.id, 'completed', result);
       console.log(`[TaskRunner] 任务 #${task.id} 执行完成`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      const stack = error instanceof Error ? error.stack : undefined;
       this.updateStatus(task.id, 'failed', message);
+      logger.error(`任务执行失败: ${message}`, stack);
       console.error(`[TaskRunner] 任务 #${task.id} 执行失败:`, message);
     } finally {
+      await logger.flush();
       this.running = false;
     }
   }
 
-  private async executeReview(task: ReviewTask): Promise<string> {
+  private async executeReview(task: ReviewTask, logger: ReturnType<typeof createDbLogger>): Promise<string> {
     const { appConfig, reviewOptions } = buildFromDB(task);
-    const logger = createDbLogger(task.id);
 
     logger.info(`评审启动 | 目标: ${reviewOptions.targetPath} | 模型: ${appConfig.model}`);
 
