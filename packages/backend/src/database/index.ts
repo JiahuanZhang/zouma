@@ -19,7 +19,7 @@ export function initializeDatabase(): void {
     )
   `);
 
-  const gitRepoColumns = db.prepare("PRAGMA table_info(git_repo)").all() as { name: string }[];
+  const gitRepoColumns = db.prepare('PRAGMA table_info(git_repo)').all() as { name: string }[];
   if (!gitRepoColumns.some((c) => c.name === 'local_path')) {
     db.exec(`ALTER TABLE git_repo ADD COLUMN local_path TEXT`);
   }
@@ -57,7 +57,7 @@ export function initializeDatabase(): void {
     )
   `);
 
-  const planColumns = db.prepare("PRAGMA table_info(review_plan)").all() as { name: string }[];
+  const planColumns = db.prepare('PRAGMA table_info(review_plan)').all() as { name: string }[];
 
   if (!planColumns.some((c) => c.name === 'trigger_type')) {
     db.exec(`ALTER TABLE review_plan ADD COLUMN trigger_type TEXT NOT NULL DEFAULT 'interval'`);
@@ -74,8 +74,13 @@ export function initializeDatabase(): void {
 
   // 迁移：旧的 interval_hours/daily_time 列 → trigger_config JSON
   if (planColumns.some((c) => c.name === 'interval_hours')) {
-    const oldPlans = db.prepare('SELECT id, trigger_type, interval_hours, daily_time FROM review_plan').all() as {
-      id: number; trigger_type: string; interval_hours: number | null; daily_time: string | null;
+    const oldPlans = db
+      .prepare('SELECT id, trigger_type, interval_hours, daily_time FROM review_plan')
+      .all() as {
+      id: number;
+      trigger_type: string;
+      interval_hours: number | null;
+      daily_time: string | null;
     }[];
     for (const p of oldPlans) {
       let config = '{}';
@@ -107,7 +112,9 @@ export function initializeDatabase(): void {
     )
   `);
 
-  const reviewTaskColumns = db.prepare("PRAGMA table_info(review_task)").all() as { name: string }[];
+  const reviewTaskColumns = db.prepare('PRAGMA table_info(review_task)').all() as {
+    name: string;
+  }[];
   if (!reviewTaskColumns.some((c) => c.name === 'plan_id')) {
     db.exec(`ALTER TABLE review_task ADD COLUMN plan_id INTEGER`);
   }
@@ -116,11 +123,15 @@ export function initializeDatabase(): void {
   }
   if (!reviewTaskColumns.some((c) => c.name === 'repo_name')) {
     db.exec(`ALTER TABLE review_task ADD COLUMN repo_name TEXT`);
-    db.exec(`UPDATE review_task SET repo_name = (SELECT name FROM git_repo WHERE git_repo.id = review_task.repo_id)`);
+    db.exec(
+      `UPDATE review_task SET repo_name = (SELECT name FROM git_repo WHERE git_repo.id = review_task.repo_id)`
+    );
   }
   if (!reviewTaskColumns.some((c) => c.name === 'llm_config_name')) {
     db.exec(`ALTER TABLE review_task ADD COLUMN llm_config_name TEXT`);
-    db.exec(`UPDATE review_task SET llm_config_name = (SELECT name FROM llm_config WHERE llm_config.id = review_task.llm_config_id)`);
+    db.exec(
+      `UPDATE review_task SET llm_config_name = (SELECT name FROM llm_config WHERE llm_config.id = review_task.llm_config_id)`
+    );
   }
 
   db.exec(`

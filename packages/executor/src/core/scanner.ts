@@ -1,14 +1,14 @@
-import { execSync } from "node:child_process";
-import path from "node:path";
-import { glob } from "glob";
-import type { ReviewOptions } from "./reviewTypes.js";
+import { execSync } from 'node:child_process';
+import path from 'node:path';
+import { glob } from 'glob';
+import type { ReviewOptions } from './reviewTypes.js';
 
 export async function scanFull(options: ReviewOptions): Promise<string[]> {
   const { targetPath, includeExtensions, excludePatterns } = options;
   const extGlob =
     includeExtensions.length === 1
       ? `**/*${includeExtensions[0]}`
-      : `**/*{${includeExtensions.join(",")}}`;
+      : `**/*{${includeExtensions.join(',')}}`;
 
   const files = await glob(extGlob, {
     cwd: targetPath,
@@ -23,16 +23,16 @@ export async function scanFull(options: ReviewOptions): Promise<string[]> {
 export async function scanIncremental(
   targetPath: string,
   lastCommit: string,
-  includeExtensions: string[],
+  includeExtensions: string[]
 ): Promise<string[]> {
   const extSet = new Set(includeExtensions);
   const raw = execSync(`git diff --name-only --diff-filter=ACMR ${lastCommit}..HEAD`, {
     cwd: targetPath,
-    encoding: "utf-8",
+    encoding: 'utf-8',
   });
 
   return raw
-    .split("\n")
+    .split('\n')
     .map((l) => l.trim())
     .filter((f) => f && extSet.has(path.extname(f)));
 }

@@ -1,26 +1,25 @@
-import type { AgentDefinition } from "@anthropic-ai/claude-agent-sdk";
+import type { AgentDefinition } from '@anthropic-ai/claude-agent-sdk';
 
-const READ_ONLY_TOOLS = ["Read", "Grep", "Glob"];
+const READ_ONLY_TOOLS = ['Read', 'Grep', 'Glob'];
 
 export function createReviewAgents(
   model?: string,
-  projectContext?: string,
+  projectContext?: string
 ): Record<string, AgentDefinition> {
-  const agentModel = (model || "sonnet") as AgentDefinition["model"];
+  const agentModel = (model || 'sonnet') as AgentDefinition['model'];
   const ctx = projectContext
     ? `\n## 项目全局上下文（请参考跨文件依赖关系进行评审）\n${projectContext}\n`
-    : "";
+    : '';
   return {
-    "style-reviewer": createStyleReviewer(agentModel, ctx),
-    "logic-reviewer": createLogicReviewer(agentModel, ctx),
-    "robustness-reviewer": createRobustnessReviewer(agentModel, ctx),
+    'style-reviewer': createStyleReviewer(agentModel, ctx),
+    'logic-reviewer': createLogicReviewer(agentModel, ctx),
+    'robustness-reviewer': createRobustnessReviewer(agentModel, ctx),
   };
 }
 
-function createStyleReviewer(model: AgentDefinition["model"], ctx: string): AgentDefinition {
+function createStyleReviewer(model: AgentDefinition['model'], ctx: string): AgentDefinition {
   return {
-    description:
-      "代码风格评审专家，负责检查命名规范、格式一致性、import 组织、注释质量等",
+    description: '代码风格评审专家，负责检查命名规范、格式一致性、import 组织、注释质量等',
     tools: READ_ONLY_TOOLS,
     model,
     prompt: `你是一名资深代码风格评审专家。请对提供的代码文件进行风格审查。
@@ -39,10 +38,9 @@ ${ctx}
   };
 }
 
-function createLogicReviewer(model: AgentDefinition["model"], ctx: string): AgentDefinition {
+function createLogicReviewer(model: AgentDefinition['model'], ctx: string): AgentDefinition {
   return {
-    description:
-      "逻辑错误评审专家，负责检查条件判断、边界条件、异步竞态、算法正确性等",
+    description: '逻辑错误评审专家，负责检查条件判断、边界条件、异步竞态、算法正确性等',
     tools: READ_ONLY_TOOLS,
     model,
     prompt: `你是一名资深代码逻辑评审专家。请对提供的代码文件进行逻辑审查。
@@ -61,10 +59,9 @@ ${ctx}
   };
 }
 
-function createRobustnessReviewer(model: AgentDefinition["model"], ctx: string): AgentDefinition {
+function createRobustnessReviewer(model: AgentDefinition['model'], ctx: string): AgentDefinition {
   return {
-    description:
-      "健壮性评审专家，负责检查错误处理、空值安全、输入验证、资源管理、安全漏洞等",
+    description: '健壮性评审专家，负责检查错误处理、空值安全、输入验证、资源管理、安全漏洞等',
     tools: READ_ONLY_TOOLS,
     model,
     prompt: `你是一名资深代码健壮性评审专家。请对提供的代码文件进行健壮性审查。

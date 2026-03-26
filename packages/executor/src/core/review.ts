@@ -1,12 +1,13 @@
-import { query } from "@anthropic-ai/claude-agent-sdk";
-import { createReviewAgents } from "./agents.js";
+import { query, SDKMessage } from '@anthropic-ai/claude-agent-sdk';
+import { createReviewAgents } from './agents.js';
 import {
   REVIEW_REPORT_SCHEMA,
+  ReviewReportSchema,
   type AppConfig,
   type ReviewLogger,
   type ReviewOptions,
   type ReviewReport,
-} from "./reviewTypes.js";
+} from './reviewTypes.js';
 
 export function buildEnv(config: AppConfig): Record<string, string> {
   const env: Record<string, string> = {};
@@ -18,7 +19,7 @@ export function buildEnv(config: AppConfig): Record<string, string> {
 function buildOrchestratorPrompt(projectContext?: string): string {
   const contextSection = projectContext
     ? `\n## 项目全局上下文\n以下是整个项目的结构摘要，请在评审时参考跨文件的依赖关系：\n\n${projectContext}\n`
-    : "";
+    : '';
 
   return `你是一名代码评审编排专家。你需要协调三个专业评审子智能体对代码进行全面评审。
 ${contextSection}
@@ -38,17 +39,17 @@ ${contextSection}
 }
 
 function truncate(s: string, max = 200): string {
-  return s.length > max ? s.slice(0, max) + "..." : s;
+  return s.length > max ? s.slice(0, max) + '...' : s;
 }
 
-function handleSDKMessage(message: any, label: string, logger: ReviewLogger): void {
+function handleSDKMessage(message: SDKMessage, label: string, logger: ReviewLogger): void {
   switch (message.type) {
-    case "assistant": {
+    case 'assistant': {
       const blocks = message.message?.content ?? [];
       for (const block of blocks) {
-        if (block.type === "text") {
+        if (block.type === 'text') {
           logger.info(`[${label}] LLM 输出文本`, `Full text:\n${block.text}`);
-        } else if (block.type === "tool_use") {
+        } else if (block.type === 'tool_use') {
           const inputStr = JSON.stringify(block.input ?? {});
           logger.info(`[${label}] 调用工具: ${block.name}`, `Tool input: ${inputStr}`);
         }
@@ -60,28 +61,30 @@ function handleSDKMessage(message: any, label: string, logger: ReviewLogger): vo
       break;
     }
 
-    case "tool_progress": {
-      const toolName = message.tool_name ?? "unknown";
-      const elapsed = message.elapsed_time_seconds?.toFixed(1) ?? "?";
+    case 'tool_progress': {
+      const toolName = message.tool_name ?? 'unknown';
+      const elapsed = message.elapsed_time_seconds?.toFixed(1) ?? '?';
       logger.info(`[${label}] 工具执行中: ${toolName} (${elapsed}s)`);
       break;
     }
 
-    case "tool_use_summary": {
-      logger.info(`[${label}] 工具摘要: ${truncate(message.summary ?? "")}`);
-      logger.fileOnly("debug", `[${label}] Tool use summary detail: ${message.summary}`);
+    case 'tool_use_summary': {
+      logger.info(`[${label}] 工具摘要: ${truncate(message.summary ?? '')}`);
+      logger.fileOnly('debug', `[${label}] Tool use summary detail: ${message.summary}`);
       break;
     }
 
-    case "system": {
+    case 'system': {
       const sub = message.subtype;
-      if (sub === "task_started") {
+      if (sub === 'task_started') {
         logger.info(`[${label}] Agent 启动: ${message.description ?? message.task_id}`);
-      } else if (sub === "task_progress") {
+      } else if (sub === 'task_progress') {
         const u = message.usage ?? {};
-        const tool = message.last_tool_name ? ` (工具: ${message.last_tool_name})` : "";
-        logger.info(`[${label}] Agent 进行中: ${message.description}${tool} | tokens=${u.total_tokens ?? 0}`);
-      } else if (sub === "status") {
+        const tool = message.last_tool_name ? ` (工具: ${message.last_tool_name})` : '';
+        logger.info(
+          `[${label}] Agent 进行中: ${message.description}${tool} | tokens=${u.total_tokens ?? 0}`
+        );
+      } else if (sub === 'status') {
         if (message.status) logger.info(`[${label}] 状态: ${message.status}`);
       } else {
         logger.debug(`[${label}] system/${sub}: ${JSON.stringify(message).slice(0, 300)}`);
@@ -89,22 +92,25 @@ function handleSDKMessage(message: any, label: string, logger: ReviewLogger): vo
       break;
     }
 
-    case "result": {
+    case 'result': {
       const sub = message.subtype;
-      if (sub === "success") {
-        const cost = message.total_cost_usd?.toFixed(4) ?? "?";
-        const turns = message.num_turns ?? "?";
+      if (sub === 'success') {
+        const cost = message.total_cost_usd?.toFixed(4) ?? '?';
+        const turns = message.num_turns ?? '?';
         logger.info(`[${label}] 完成 (turns=${turns}, cost=$${cost})`);
-        logger.fileOnly("debug", `[${label}] Result text: ${truncate(message.result ?? "", 2000)}`);
+        logger.fileOnly('debug', `[${label}] Result text: ${truncate(message.result ?? '', 2000)}`);
       } else {
-        const errors = (message.errors ?? []).join("; ");
+        const errors = (message.errors ?? []).join('; ');
         logger.warn(`[${label}] 结束(${sub}): ${truncate(errors)}`);
       }
       break;
     }
 
     default:
-      logger.fileOnly("debug", `[${label}] msg(${message.type}): ${JSON.stringify(message).slice(0, 500)}`);
+      logger.fileOnly(
+        'debug',
+        `[${label}] msg(${message.type}): ${JSON.stringify(message).slice(0, 500)}`
+      );
   }
 }
 
@@ -114,9 +120,9 @@ export async function reviewBatch(
   config: AppConfig,
   logger: ReviewLogger,
   projectContext?: string,
-  budgetUsd?: number,
+  budgetUsd?: number
 ): Promise<ReviewReport> {
-  const fileList = files.map((f) => `- ${f}`).join("\n");
+  const fileList = files.map((f) => `- ${f}`).join('\n');
   const prompt = `请评审以下代码文件（基于目录 ${options.targetPath}）：\n\n${fileList}\n\n请逐一调用三个评审子智能体进行全面评审，然后汇总输出结构化报告。`;
 
   const agents = createReviewAgents(config.model, projectContext);
@@ -127,8 +133,8 @@ export async function reviewBatch(
 
   const label = `深审-${files.length}f`;
   logger.info(`[${label}] 开始评审 ${files.length} 个文件`);
-  logger.fileOnly("debug", `[${label}] 文件列表:\n${fileList}`);
-  logger.fileOnly("debug", `[${label}] Prompt:\n${prompt}`);
+  logger.fileOnly('debug', `[${label}] 文件列表:\n${fileList}`);
+  logger.fileOnly('debug', `[${label}] Prompt:\n${prompt}`);
 
   try {
     const conversation = query({
@@ -137,8 +143,8 @@ export async function reviewBatch(
         cwd: options.targetPath,
         agents,
         systemPrompt: buildOrchestratorPrompt(projectContext),
-        allowedTools: ["Read", "Grep", "Glob", "Agent"],
-        permissionMode: "bypassPermissions",
+        allowedTools: ['Read', 'Grep', 'Glob', 'Agent'],
+        permissionMode: 'bypassPermissions',
         allowDangerouslySkipPermissions: true,
         maxTurns: options.maxTurns,
         maxBudgetUsd: budgetUsd ?? options.maxBudgetUsd,
@@ -146,20 +152,21 @@ export async function reviewBatch(
         ...(Object.keys(env).length > 0 && { env }),
         ...(ac && { abortController: ac }),
         outputFormat: {
-          type: "json_schema",
+          type: 'json_schema',
           schema: REVIEW_REPORT_SCHEMA,
         },
       },
     });
 
-    let resultText = "";
+    let resultText = '';
 
     for await (const message of conversation) {
       handleSDKMessage(message, label, logger);
 
-      if (message.type === "result" && message.subtype === "success") {
+      if (message.type === 'result' && message.subtype === 'success') {
         if (message.structured_output) {
-          return message.structured_output as ReviewReport;
+          const parsed = validateReport(message.structured_output, label, logger);
+          if (parsed) return parsed;
         }
         resultText = message.result;
       }
@@ -169,11 +176,11 @@ export async function reviewBatch(
   } catch (err) {
     if (ac?.signal.aborted) {
       logger.warn(`[${label}] 评审超时 (${options.timeoutMs / 1000}s)`);
-      return parseReportFallback("");
+      return parseReportFallback('');
     }
     const errMsg = err instanceof Error ? err.message : String(err);
     logger.error(`[${label}] 评审失败: ${truncate(errMsg)}`, `Full error: ${errMsg}`);
-    return parseReportFallback("");
+    return parseReportFallback('');
   } finally {
     if (timer) clearTimeout(timer);
   }
@@ -195,9 +202,9 @@ export async function quickScanBatch(
   config: AppConfig,
   logger: ReviewLogger,
   projectContext: string,
-  budgetUsd?: number,
+  budgetUsd?: number
 ): Promise<ReviewReport> {
-  const fileList = files.map((f) => `- ${f}`).join("\n");
+  const fileList = files.map((f) => `- ${f}`).join('\n');
   const prompt = `快速扫描以下代码文件（基于目录 ${options.targetPath}），仅找出严重问题：\n\n${fileList}`;
 
   const env = buildEnv(config);
@@ -208,7 +215,7 @@ export async function quickScanBatch(
 
   const label = `快扫-${files.length}f`;
   logger.info(`[${label}] 开始扫描 ${files.length} 个文件`);
-  logger.fileOnly("debug", `[${label}] 文件列表:\n${fileList}`);
+  logger.fileOnly('debug', `[${label}] 文件列表:\n${fileList}`);
 
   try {
     const conversation = query({
@@ -216,8 +223,8 @@ export async function quickScanBatch(
       options: {
         cwd: options.targetPath,
         systemPrompt,
-        allowedTools: ["Read", "Grep", "Glob"],
-        permissionMode: "bypassPermissions",
+        allowedTools: ['Read', 'Grep', 'Glob'],
+        permissionMode: 'bypassPermissions',
         allowDangerouslySkipPermissions: true,
         maxTurns: Math.min(options.maxTurns, 10),
         maxBudgetUsd: budgetUsd,
@@ -225,20 +232,21 @@ export async function quickScanBatch(
         ...(Object.keys(env).length > 0 && { env }),
         ...(ac && { abortController: ac }),
         outputFormat: {
-          type: "json_schema",
+          type: 'json_schema',
           schema: REVIEW_REPORT_SCHEMA,
         },
       },
     });
 
-    let resultText = "";
+    let resultText = '';
 
     for await (const message of conversation) {
       handleSDKMessage(message, label, logger);
 
-      if (message.type === "result" && message.subtype === "success") {
+      if (message.type === 'result' && message.subtype === 'success') {
         if (message.structured_output) {
-          return message.structured_output as ReviewReport;
+          const parsed = validateReport(message.structured_output, label, logger);
+          if (parsed) return parsed;
         }
         resultText = message.result;
       }
@@ -248,14 +256,24 @@ export async function quickScanBatch(
   } catch (err) {
     if (ac?.signal.aborted) {
       logger.warn(`[${label}] 快扫超时 (${options.timeoutMs / 1000}s)`);
-      return parseReportFallback("");
+      return parseReportFallback('');
     }
     const errMsg = err instanceof Error ? err.message : String(err);
     logger.error(`[${label}] 快扫失败: ${truncate(errMsg)}`, `Full error: ${errMsg}`);
-    return parseReportFallback("");
+    return parseReportFallback('');
   } finally {
     if (timer) clearTimeout(timer);
   }
+}
+
+function validateReport(raw: unknown, label: string, logger: ReviewLogger): ReviewReport | null {
+  const result = ReviewReportSchema.safeParse(raw);
+  if (result.success) return result.data;
+
+  const errors = result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
+  logger.error(`[${label}] structured_output 类型校验失败: ${errors}`);
+  logger.fileOnly('debug', `[${label}] 原始 structured_output: ${JSON.stringify(raw)}`);
+  return null;
 }
 
 function parseReportFallback(text: string): ReviewReport {
@@ -267,7 +285,7 @@ function parseReportFallback(text: string): ReviewReport {
   }
 
   return {
-    summary: text || "评审未返回有效结果",
+    summary: text || '评审未返回有效结果',
     issues: [],
     score: { style: 0, logic: 0, robustness: 0, overall: 0 },
   };

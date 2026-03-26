@@ -41,7 +41,10 @@ export class TaskRunner {
     }
   }
 
-  private async executeReview(task: ReviewTask, logger: ReturnType<typeof createDbLogger>): Promise<string> {
+  private async executeReview(
+    task: ReviewTask,
+    logger: ReturnType<typeof createDbLogger>
+  ): Promise<string> {
     const { appConfig, reviewOptions } = buildFromDB(task);
 
     logger.info(`评审启动 | 目标: ${reviewOptions.targetPath} | 模型: ${appConfig.model}`);

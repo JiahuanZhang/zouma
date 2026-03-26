@@ -40,15 +40,15 @@ export class ReviewPlanService {
     if (params) {
       const offset = (params.page - 1) * params.pageSize;
       const items = parseRows(
-        db.prepare(`${SELECT_WITH_RELATIONS} ORDER BY p.id DESC LIMIT ? OFFSET ?`)
+        db
+          .prepare(`${SELECT_WITH_RELATIONS} ORDER BY p.id DESC LIMIT ? OFFSET ?`)
           .all(params.pageSize, offset) as ReviewPlanWithRelations[]
       );
       return { items, total };
     }
 
     const items = parseRows(
-      db.prepare(`${SELECT_WITH_RELATIONS} ORDER BY p.id DESC`)
-        .all() as ReviewPlanWithRelations[]
+      db.prepare(`${SELECT_WITH_RELATIONS} ORDER BY p.id DESC`).all() as ReviewPlanWithRelations[]
     );
     return { items, total };
   }
@@ -89,9 +89,9 @@ export class ReviewPlanService {
 
   static update(id: number, dto: UpdateReviewPlanDTO): ReviewPlanWithRelations | undefined {
     const db = DatabaseManager.getDatabase();
-    const existing = db
-      .prepare('SELECT * FROM review_plan WHERE id = ?')
-      .get(id) as ReviewPlan | undefined;
+    const existing = db.prepare('SELECT * FROM review_plan WHERE id = ?').get(id) as
+      | ReviewPlan
+      | undefined;
     if (!existing) return undefined;
 
     const fields: string[] = [];
@@ -121,22 +121,27 @@ export class ReviewPlanService {
 
   static trigger(id: number): { plan: ReviewPlanWithRelations; taskId: number } | undefined {
     const db = DatabaseManager.getDatabase();
-    const raw = db.prepare('SELECT * FROM review_plan WHERE id = ?').get(id) as ReviewPlan | undefined;
+    const raw = db.prepare('SELECT * FROM review_plan WHERE id = ?').get(id) as
+      | ReviewPlan
+      | undefined;
     if (!raw) return undefined;
     const plan = parseRow(raw);
 
-    const task = ReviewTaskService.create({
-      name: `[计划] ${plan.name} - ${new Date().toLocaleString('zh-CN')}`,
-      repo_id: plan.repo_id,
-      llm_config_id: plan.llm_config_id,
-      target_branch: plan.target_branch ?? undefined,
-      file_patterns: plan.file_patterns ?? undefined,
-    }, { planId: plan.id, planName: plan.name });
+    const task = ReviewTaskService.create(
+      {
+        name: `[计划] ${plan.name} - ${new Date().toLocaleString('zh-CN')}`,
+        repo_id: plan.repo_id,
+        llm_config_id: plan.llm_config_id,
+        target_branch: plan.target_branch ?? undefined,
+        file_patterns: plan.file_patterns ?? undefined,
+      },
+      { planId: plan.id, planName: plan.name }
+    );
 
     db.prepare(
       `UPDATE review_plan SET last_triggered_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`
     ).run(id);
 
-    return { plan: ReviewPlanService.findById(id)!, taskId: (task as any).id };
+    return { plan: ReviewPlanService.findById(id)!, taskId: task.id };
   }
 }

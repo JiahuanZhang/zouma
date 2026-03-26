@@ -12,11 +12,7 @@ const appStore = useAppStore();
       <div class="logo-area">
         <h2 class="logo-title">{{ appStore.title }}</h2>
       </div>
-      <el-menu
-        :default-active="route.path"
-        router
-        class="side-menu"
-      >
+      <el-menu :default-active="route.path" router class="side-menu">
         <el-menu-item index="/">
           <el-icon><i class="el-icon-house" /></el-icon>
           <span>首页</span>

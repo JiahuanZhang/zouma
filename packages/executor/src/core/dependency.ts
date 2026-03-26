@@ -1,7 +1,7 @@
-import fs from "node:fs";
-import path from "node:path";
+import fs from 'node:fs';
+import path from 'node:path';
 
-const JS_EXTS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".vue", ".svelte"]);
+const JS_EXTS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.vue', '.svelte']);
 
 export function parseImports(content: string, ext: string): string[] {
   const imports: string[] = [];
@@ -12,7 +12,7 @@ export function parseImports(content: string, ext: string): string[] {
     let m: RegExpExecArray | null;
     while ((m = fromRegex.exec(content)) !== null) imports.push(m[1]);
     while ((m = requireRegex.exec(content)) !== null) imports.push(m[1]);
-  } else if (ext === ".py") {
+  } else if (ext === '.py') {
     const pyFromRegex = /from\s+([\w.]+)\s+import/g;
     const pyImportRegex = /^import\s+([\w.]+)/gm;
     let m: RegExpExecArray | null;
@@ -24,25 +24,25 @@ export function parseImports(content: string, ext: string): string[] {
 }
 
 function resolveImport(importPath: string, fromFile: string, fileSet: Set<string>): string | null {
-  if (!importPath.startsWith(".")) return null;
+  if (!importPath.startsWith('.')) return null;
 
   const fromDir = path.dirname(fromFile);
   const base = path.normalize(path.join(fromDir, importPath));
 
   if (fileSet.has(base)) return base;
 
-  const stripped = base.replace(/\.(js|jsx|mjs|cjs)$/, "");
+  const stripped = base.replace(/\.(js|jsx|mjs|cjs)$/, '');
   if (stripped !== base) {
-    for (const ext of [".ts", ".tsx", ".js", ".jsx"]) {
+    for (const ext of ['.ts', '.tsx', '.js', '.jsx']) {
       if (fileSet.has(stripped + ext)) return stripped + ext;
     }
   }
 
-  for (const ext of [".ts", ".tsx", ".js", ".jsx", ".mjs", ".py"]) {
+  for (const ext of ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.py']) {
     if (fileSet.has(base + ext)) return base + ext;
   }
 
-  for (const ext of [".ts", ".tsx", ".js", ".jsx"]) {
+  for (const ext of ['.ts', '.tsx', '.js', '.jsx']) {
     const idx = path.join(base, `index${ext}`);
     if (fileSet.has(idx)) return idx;
   }
@@ -100,7 +100,7 @@ export interface DependencyResult {
 export function analyzeDependencies(
   files: string[],
   targetPath: string,
-  maxGroupSize: number,
+  maxGroupSize: number
 ): DependencyResult {
   const fileSet = new Set(files);
   const uf = new UnionFind(files);
@@ -109,7 +109,7 @@ export function analyzeDependencies(
   for (const file of files) {
     let content: string;
     try {
-      content = fs.readFileSync(path.join(targetPath, file), "utf-8");
+      content = fs.readFileSync(path.join(targetPath, file), 'utf-8');
     } catch {
       continue;
     }

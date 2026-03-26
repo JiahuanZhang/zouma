@@ -1,4 +1,12 @@
-import type { LlmConfig, CreateLlmConfigDTO, UpdateLlmConfigDTO, PaginatedResult, FetchModelsDTO, ModelInfo, LlmTestResult } from '@zouma/common';
+import type {
+  LlmConfig,
+  CreateLlmConfigDTO,
+  UpdateLlmConfigDTO,
+  PaginatedResult,
+  FetchModelsDTO,
+  ModelInfo,
+  LlmTestResult,
+} from '@zouma/common';
 import { http } from './http';
 
 const BASE = '/llm-configs';

@@ -1,11 +1,11 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 // ── Zod Schemas ──
 
-export const IssueSeveritySchema = z.enum(["error", "warning", "info"]);
-export const IssueCategorySchema = z.enum(["style", "logic", "robustness"]);
-export const ReviewModeSchema = z.enum(["full", "incremental"]);
-export const ReviewStrategySchema = z.enum(["simple", "smart"]);
+export const IssueSeveritySchema = z.enum(['error', 'warning', 'info']);
+export const IssueCategorySchema = z.enum(['style', 'logic', 'robustness']);
+export const ReviewModeSchema = z.enum(['full', 'incremental']);
+export const ReviewStrategySchema = z.enum(['simple', 'smart']);
 
 export const ReviewIssueSchema = z.object({
   severity: IssueSeveritySchema,
@@ -24,7 +24,7 @@ export const ReviewScoreSchema = z.object({
 });
 
 export const ReviewReportSchema = z.object({
-  summary: z.string().describe("Overall review summary in Chinese"),
+  summary: z.string().describe('Overall review summary in Chinese'),
   issues: z.array(ReviewIssueSchema),
   score: ReviewScoreSchema,
 });
@@ -79,33 +79,56 @@ export type ReviewOptions = z.infer<typeof ReviewOptionsSchema>;
 
 // ── Defaults ──
 
-export const DEFAULT_OPTIONS: Omit<ReviewOptions, "targetPath"> = {
-  mode: "incremental",
-  strategy: "smart",
+export const DEFAULT_OPTIONS: Omit<ReviewOptions, 'targetPath'> = {
+  mode: 'incremental',
+  strategy: 'smart',
   batchSize: 15,
   concurrency: 3,
   maxTurns: 30,
   maxGroupSize: 25,
   timeoutMs: 3000_000,
   includeExtensions: [
-    ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
-    ".py", ".java", ".go", ".rs", ".c", ".cpp", ".h",
-    ".cs", ".rb", ".php", ".swift", ".kt", ".scala",
-    ".vue", ".svelte",
+    '.ts',
+    '.tsx',
+    '.js',
+    '.jsx',
+    '.mjs',
+    '.cjs',
+    '.py',
+    '.java',
+    '.go',
+    '.rs',
+    '.c',
+    '.cpp',
+    '.h',
+    '.cs',
+    '.rb',
+    '.php',
+    '.swift',
+    '.kt',
+    '.scala',
+    '.vue',
+    '.svelte',
   ],
   excludePatterns: [
-    "**/node_modules/**", "**/dist/**", "**/build/**",
-    "**/.git/**", "**/vendor/**", "**/target/**",
-    "**/__pycache__/**", "**/*.min.*", "**/*.lock",
-    "**/package-lock.json", "**/pnpm-lock.yaml", "**/yarn.lock",
+    '**/node_modules/**',
+    '**/dist/**',
+    '**/build/**',
+    '**/.git/**',
+    '**/vendor/**',
+    '**/target/**',
+    '**/__pycache__/**',
+    '**/*.min.*',
+    '**/*.lock',
+    '**/package-lock.json',
+    '**/pnpm-lock.yaml',
+    '**/yarn.lock',
   ],
 };
 
 // ── JSON Schema (for Claude Agent SDK outputFormat) ──
 
-export const REVIEW_REPORT_SCHEMA = z.toJSONSchema(
-  ReviewReportSchema,
-) as Record<string, unknown>;
+export const REVIEW_REPORT_SCHEMA = z.toJSONSchema(ReviewReportSchema) as Record<string, unknown>;
 
 // ── Logger interface (injected, not global) ──
 

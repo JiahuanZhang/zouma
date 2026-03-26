@@ -74,10 +74,16 @@ function buildTriggerConfig(): CreateReviewPlanDTO['trigger_config'] {
   return {};
 }
 
-function extractTriggerConfig(row: ReviewPlanWithRelations): { interval_hours: number; daily_time: string } {
+function extractTriggerConfig(row: ReviewPlanWithRelations): {
+  interval_hours: number;
+  daily_time: string;
+} {
   const config = row.trigger_config;
   if (row.trigger_type === 'interval') {
-    return { interval_hours: (config as IntervalTriggerConfig).interval_hours ?? 24, daily_time: '09:00' };
+    return {
+      interval_hours: (config as IntervalTriggerConfig).interval_hours ?? 24,
+      daily_time: '09:00',
+    };
   }
   if (row.trigger_type === 'daily') {
     return { interval_hours: 24, daily_time: (config as DailyTriggerConfig).time ?? '09:00' };
@@ -161,11 +167,11 @@ async function handleDelete(row: ReviewPlanWithRelations) {
 }
 
 async function handleTrigger(row: ReviewPlanWithRelations) {
-  await ElMessageBox.confirm(
-    `确定立即触发计划「${row.name}」？将新增一条评审任务。`,
-    '确认触发',
-    { type: 'info', confirmButtonText: '立即触发', cancelButtonText: '取消' }
-  );
+  await ElMessageBox.confirm(`确定立即触发计划「${row.name}」？将新增一条评审任务。`, '确认触发', {
+    type: 'info',
+    confirmButtonText: '立即触发',
+    cancelButtonText: '取消',
+  });
   const res = await reviewPlanApi.trigger(row.id);
   ElMessage.success(`已触发，评审任务 ID: ${res.data.taskId}`);
   fetchData();

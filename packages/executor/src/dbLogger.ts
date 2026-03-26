@@ -6,10 +6,10 @@ type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 const LEVEL_ORDER: Record<LogLevel, number> = { debug: 0, info: 1, warn: 2, error: 3 };
 
 const CONSOLE_PREFIX: Record<LogLevel, string> = {
-  debug: "  .",
-  info: "  ->",
-  warn: "  !",
-  error: "  X",
+  debug: '  .',
+  info: '  ->',
+  warn: '  !',
+  error: '  X',
 };
 
 export function createDbLogger(taskId: number, consoleLevel: LogLevel = 'info'): ReviewLogger {

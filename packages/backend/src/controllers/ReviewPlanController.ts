@@ -1,5 +1,10 @@
 import type { Request, Response } from 'express';
-import type { CreateReviewPlanDTO, UpdateReviewPlanDTO, ReviewPlanTriggerType, TriggerConfig } from '@zouma/common';
+import type {
+  CreateReviewPlanDTO,
+  UpdateReviewPlanDTO,
+  ReviewPlanTriggerType,
+  TriggerConfig,
+} from '@zouma/common';
 import { ResponseHelper, Validator } from '@zouma/common';
 import { ReviewPlanService } from '../services/ReviewPlanService.js';
 
@@ -66,7 +71,9 @@ export class ReviewPlanController {
       return;
     }
     if (!dto.trigger_type || !VALID_TRIGGER_TYPES.includes(dto.trigger_type)) {
-      res.status(400).json(ResponseHelper.error(`trigger_type 必须为 ${VALID_TRIGGER_TYPES.join('/')}`, 400));
+      res
+        .status(400)
+        .json(ResponseHelper.error(`trigger_type 必须为 ${VALID_TRIGGER_TYPES.join('/')}`, 400));
       return;
     }
     const configErr = validateTriggerConfig(dto.trigger_type, dto.trigger_config);
@@ -86,7 +93,9 @@ export class ReviewPlanController {
     }
     const dto = req.body as UpdateReviewPlanDTO;
     if (dto.trigger_type && !VALID_TRIGGER_TYPES.includes(dto.trigger_type)) {
-      res.status(400).json(ResponseHelper.error(`trigger_type 必须为 ${VALID_TRIGGER_TYPES.join('/')}`, 400));
+      res
+        .status(400)
+        .json(ResponseHelper.error(`trigger_type 必须为 ${VALID_TRIGGER_TYPES.join('/')}`, 400));
       return;
     }
     if (dto.trigger_type && dto.trigger_config) {

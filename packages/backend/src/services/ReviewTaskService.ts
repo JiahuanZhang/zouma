@@ -31,15 +31,22 @@ export class ReviewTaskService {
 
   static findById(id: number): ReviewTaskWithRelations | undefined {
     const db = DatabaseManager.getDatabase();
-    return db
-      .prepare('SELECT * FROM review_task WHERE id = ?')
-      .get(id) as ReviewTaskWithRelations | undefined;
+    return db.prepare('SELECT * FROM review_task WHERE id = ?').get(id) as
+      | ReviewTaskWithRelations
+      | undefined;
   }
 
-  static create(dto: CreateReviewTaskDTO, snapshot?: { planId?: number; planName?: string }): ReviewTask {
+  static create(
+    dto: CreateReviewTaskDTO,
+    snapshot?: { planId?: number; planName?: string }
+  ): ReviewTask {
     const db = DatabaseManager.getDatabase();
-    const repoRow = db.prepare('SELECT name FROM git_repo WHERE id = ?').get(dto.repo_id) as { name: string } | undefined;
-    const llmRow = db.prepare('SELECT name FROM llm_config WHERE id = ?').get(dto.llm_config_id) as { name: string } | undefined;
+    const repoRow = db.prepare('SELECT name FROM git_repo WHERE id = ?').get(dto.repo_id) as
+      | { name: string }
+      | undefined;
+    const llmRow = db.prepare('SELECT name FROM llm_config WHERE id = ?').get(dto.llm_config_id) as
+      | { name: string }
+      | undefined;
 
     const result = db
       .prepare(
@@ -62,9 +69,9 @@ export class ReviewTaskService {
 
   static update(id: number, dto: UpdateReviewTaskDTO): ReviewTaskWithRelations | undefined {
     const db = DatabaseManager.getDatabase();
-    const existing = db
-      .prepare('SELECT * FROM review_task WHERE id = ?')
-      .get(id) as ReviewTask | undefined;
+    const existing = db.prepare('SELECT * FROM review_task WHERE id = ?').get(id) as
+      | ReviewTask
+      | undefined;
     if (!existing) return undefined;
 
     const fields: string[] = [];
@@ -101,9 +108,9 @@ export class ReviewTaskService {
 
   static execute(id: number): ReviewTaskWithRelations | undefined {
     const db = DatabaseManager.getDatabase();
-    const existing = db
-      .prepare('SELECT * FROM review_task WHERE id = ?')
-      .get(id) as ReviewTask | undefined;
+    const existing = db.prepare('SELECT * FROM review_task WHERE id = ?').get(id) as
+      | ReviewTask
+      | undefined;
     if (!existing) return undefined;
 
     db.prepare(

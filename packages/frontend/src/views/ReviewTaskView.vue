@@ -214,12 +214,7 @@ onMounted(() => {
         </el-form-item>
         <el-form-item label="关联仓库" prop="repo_id">
           <el-select v-model="form.repo_id" placeholder="请选择仓库" style="width: 100%">
-            <el-option
-              v-for="r in repos"
-              :key="r.id"
-              :label="r.name"
-              :value="r.id"
-            />
+            <el-option v-for="r in repos" :key="r.id" :label="r.name" :value="r.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="LLM 配置" prop="llm_config_id">
@@ -246,15 +241,20 @@ onMounted(() => {
     </el-dialog>
 
     <el-dialog v-model="logDialogVisible" :title="`执行日志 - ${logTaskName}`" width="800px">
-      <el-table v-loading="logLoading" :data="logList" stripe border max-height="500px" size="small">
+      <el-table
+        v-loading="logLoading"
+        :data="logList"
+        stripe
+        border
+        max-height="500px"
+        size="small"
+      >
         <el-table-column prop="id" label="ID" width="60" />
         <el-table-column label="级别" width="80" align="center">
           <template #default="{ row }">
-            <el-tag
-              :type="logLevelType(row.level)"
-              size="small"
-              effect="plain"
-            >{{ row.level }}</el-tag>
+            <el-tag :type="logLevelType(row.level)" size="small" effect="plain">{{
+              row.level
+            }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="message" label="消息" min-width="250" show-overflow-tooltip />

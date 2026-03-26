@@ -116,10 +116,7 @@ export class LlmConfigService {
     return models;
   }
 
-  private static async fetchAnthropicModels(
-    baseUrl: string,
-    apiKey: string
-  ): Promise<ModelInfo[]> {
+  private static async fetchAnthropicModels(baseUrl: string, apiKey: string): Promise<ModelInfo[]> {
     const res = await fetch(`${baseUrl}/v1/models`, {
       headers: {
         'x-api-key': apiKey,

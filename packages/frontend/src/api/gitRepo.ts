@@ -1,4 +1,10 @@
-import type { GitRepo, CreateGitRepoDTO, UpdateGitRepoDTO, PaginatedResult, DetectLocalRepoResult } from '@zouma/common';
+import type {
+  GitRepo,
+  CreateGitRepoDTO,
+  UpdateGitRepoDTO,
+  PaginatedResult,
+  DetectLocalRepoResult,
+} from '@zouma/common';
 import { http } from './http';
 
 const BASE = '/git-repos';

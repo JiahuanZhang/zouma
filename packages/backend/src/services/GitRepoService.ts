@@ -1,4 +1,10 @@
-import type { GitRepo, CreateGitRepoDTO, UpdateGitRepoDTO, PaginationParams, DetectLocalRepoResult } from '@zouma/common';
+import type {
+  GitRepo,
+  CreateGitRepoDTO,
+  UpdateGitRepoDTO,
+  PaginationParams,
+  DetectLocalRepoResult,
+} from '@zouma/common';
 import { DatabaseManager } from '../database/index.js';
 import { execSync } from 'child_process';
 import path from 'path';
@@ -33,7 +39,14 @@ export class GitRepoService {
       .prepare(
         `INSERT INTO git_repo (name, url, branch, access_token, local_path, description) VALUES (?, ?, ?, ?, ?, ?)`
       )
-      .run(dto.name, dto.url, dto.branch ?? 'main', dto.access_token ?? null, dto.local_path ?? null, dto.description ?? null);
+      .run(
+        dto.name,
+        dto.url,
+        dto.branch ?? 'main',
+        dto.access_token ?? null,
+        dto.local_path ?? null,
+        dto.description ?? null
+      );
     return GitRepoService.findById(Number(result.lastInsertRowid))!;
   }
 

@@ -57,7 +57,14 @@ async function fetchData() {
 }
 
 function resetForm() {
-  Object.assign(form, { name: '', url: '', branch: 'main', access_token: '', local_path: '', description: '' });
+  Object.assign(form, {
+    name: '',
+    url: '',
+    branch: 'main',
+    access_token: '',
+    local_path: '',
+    description: '',
+  });
   localPath.value = '';
   detected.value = false;
 }
@@ -147,9 +154,10 @@ async function confirmDirSelection() {
   } catch (err: unknown) {
     detected.value = false;
     form.local_path = selectedPath;
-    const msg = err && typeof err === 'object' && 'response' in err
-      ? (err as { response: { data: { message: string } } }).response?.data?.message
-      : '该目录不是有效的 Git 仓库';
+    const msg =
+      err && typeof err === 'object' && 'response' in err
+        ? (err as { response: { data: { message: string } } }).response?.data?.message
+        : '该目录不是有效的 Git 仓库';
     ElMessage.error(msg || '该目录不是有效的 Git 仓库');
   } finally {
     detecting.value = false;
@@ -292,14 +300,21 @@ onMounted(fetchData);
         <el-form-item label="仓库地址" prop="url">
           <el-input
             v-model="form.url"
-            :placeholder="isLocal ? '自动识别（无远程地址可留空）' : 'https://github.com/user/repo.git'"
+            :placeholder="
+              isLocal ? '自动识别（无远程地址可留空）' : 'https://github.com/user/repo.git'
+            "
           />
         </el-form-item>
         <el-form-item label="默认分支">
           <el-input v-model="form.branch" placeholder="main" />
         </el-form-item>
         <el-form-item v-if="!isLocal" label="访问令牌">
-          <el-input v-model="form.access_token" type="password" show-password placeholder="私有仓库填写" />
+          <el-input
+            v-model="form.access_token"
+            type="password"
+            show-password
+            placeholder="私有仓库填写"
+          />
         </el-form-item>
         <el-form-item label="描述">
           <el-input v-model="form.description" type="textarea" :rows="3" placeholder="可选" />
@@ -331,7 +346,10 @@ onMounted(fetchData);
             <el-icon><FolderOpened /></el-icon>
             <span>{{ entry.name }}</span>
           </div>
-          <div v-if="!dirBrowserLoading && dirBrowserEntries.length === 0" class="dir-browser-empty">
+          <div
+            v-if="!dirBrowserLoading && dirBrowserEntries.length === 0"
+            class="dir-browser-empty"
+          >
             无子目录
           </div>
         </div>

@@ -93,7 +93,8 @@ function getStatusInfo(row: LlmConfig) {
   const s = statusMap.value[row.id];
   if (!s) return { color: '#909399', tip: '未检测' };
   if (s.loading) return { color: '#E6A23C', tip: '检测中...' };
-  if (s.result?.ok) return { color: '#67C23A', tip: `${s.result.message} (${s.result.latencyMs}ms)` };
+  if (s.result?.ok)
+    return { color: '#67C23A', tip: `${s.result.message} (${s.result.latencyMs}ms)` };
   return { color: '#F56C6C', tip: s.result?.message || '异常' };
 }
 
@@ -205,7 +206,7 @@ function handleSizeChange(val: number) {
 function ensureAutoRefresh() {
   if (_refreshTimer) return;
   _refreshTimer = setInterval(() => {
-    Object.keys(_statusCache).forEach(k => delete _statusCache[Number(k)]);
+    Object.keys(_statusCache).forEach((k) => delete _statusCache[Number(k)]);
     _lastTestTime = 0;
     fetchData(true);
   }, REFRESH_INTERVAL);
@@ -233,33 +234,20 @@ onMounted(() => {
       <el-table-column prop="base_url" label="Base URL" min-width="180" show-overflow-tooltip />
       <el-table-column label="状态" width="60" align="center">
         <template #default="{ row }">
-          <el-tooltip
-            :content="getStatusInfo(row).tip"
-            placement="top"
-          >
-            <span
-              class="status-dot"
-              :style="{ backgroundColor: getStatusInfo(row).color }"
-            />
+          <el-tooltip :content="getStatusInfo(row).tip" placement="top">
+            <span class="status-dot" :style="{ backgroundColor: getStatusInfo(row).color }" />
           </el-tooltip>
         </template>
       </el-table-column>
       <el-table-column label="启用" width="80" align="center">
         <template #default="{ row }">
-          <el-switch
-            :model-value="!!row.enabled"
-            @change="handleToggleEnabled(row)"
-          />
+          <el-switch :model-value="!!row.enabled" @change="handleToggleEnabled(row)" />
         </template>
       </el-table-column>
       <el-table-column prop="created_at" label="创建时间" width="170" />
       <el-table-column label="操作" width="210" fixed="right">
         <template #default="{ row }">
-          <el-button
-            size="small"
-            :loading="statusMap[row.id]?.loading"
-            @click="handleTest(row)"
-          >
+          <el-button size="small" :loading="statusMap[row.id]?.loading" @click="handleTest(row)">
             测试
           </el-button>
           <el-button size="small" @click="handleEdit(row)">编辑</el-button>
@@ -299,23 +287,18 @@ onMounted(() => {
               placeholder="选择或输入模型标识"
               style="flex: 1"
             >
-              <el-option
-                v-for="m in modelOptions"
-                :key="m.id"
-                :label="m.id"
-                :value="m.id"
-              />
+              <el-option v-for="m in modelOptions" :key="m.id" :label="m.id" :value="m.id" />
             </el-select>
-            <el-button
-              :loading="fetchingModels"
-              @click="handleFetchModels"
-            >
-              获取模型
-            </el-button>
+            <el-button :loading="fetchingModels" @click="handleFetchModels"> 获取模型 </el-button>
           </div>
         </el-form-item>
         <el-form-item label="API Key" prop="api_key">
-          <el-input v-model="form.api_key" type="password" show-password placeholder="请输入 API Key" />
+          <el-input
+            v-model="form.api_key"
+            type="password"
+            show-password
+            placeholder="请输入 API Key"
+          />
         </el-form-item>
         <el-form-item label="Base URL">
           <el-input v-model="form.base_url" placeholder="可选，如: https://api.openai.com/v1" />

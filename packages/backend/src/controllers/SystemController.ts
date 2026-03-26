@@ -38,9 +38,9 @@ export class SystemController {
       }
       const items = fs.readdirSync(targetPath, { withFileTypes: true });
       const entries: DirEntry[] = items
-        .filter(d => d.isDirectory() && !d.name.startsWith('.'))
+        .filter((d) => d.isDirectory() && !d.name.startsWith('.'))
         .sort((a, b) => a.name.localeCompare(b.name))
-        .map(d => ({
+        .map((d) => ({
           name: d.name,
           path: path.join(targetPath, d.name),
         }));
