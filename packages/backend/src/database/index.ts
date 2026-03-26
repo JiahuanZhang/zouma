@@ -148,4 +148,32 @@ export function initializeDatabase(): void {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_review_log_task_id ON review_log(task_id)
   `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS review_progress (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id     INTEGER NOT NULL REFERENCES review_task(id) ON DELETE CASCADE,
+      step_type   TEXT NOT NULL CHECK(step_type IN ('task_start','task_end','phase_start','phase_end','batch_start','batch_end','agent_start','agent_end','tool_call')),
+      phase       TEXT,
+      batch_index INTEGER,
+      batch_total INTEGER,
+      agent_name  TEXT,
+      tool_name   TEXT,
+      status      TEXT CHECK(status IS NULL OR status IN ('running','completed','failed')),
+      strategy    TEXT,
+      mode        TEXT,
+      total_files INTEGER,
+      file_count  INTEGER,
+      issue_count INTEGER,
+      duration_ms INTEGER,
+      tokens_used INTEGER,
+      cost_usd    REAL,
+      detail      TEXT,
+      created_at  TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_review_progress_task_id ON review_progress(task_id)
+  `);
 }

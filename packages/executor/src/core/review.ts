@@ -8,6 +8,14 @@ import {
   type ReviewOptions,
   type ReviewReport,
 } from './reviewTypes.js';
+import type { ProgressTracker } from '../progressTracker.js';
+
+export interface BatchResult {
+  report: ReviewReport;
+  tokensUsed?: number;
+  costUsd?: number;
+  turns?: number;
+}
 
 export function buildEnv(config: AppConfig): Record<string, string> {
   const env: Record<string, string> = {};
@@ -42,7 +50,30 @@ function truncate(s: string, max = 200): string {
   return s.length > max ? s.slice(0, max) + '...' : s;
 }
 
-function handleSDKMessage(message: SDKMessage, label: string, logger: ReviewLogger): void {
+interface SDKUsageInfo {
+  tokens?: number;
+  costUsd?: number;
+  turns?: number;
+}
+
+function extractSDKUsage(message: SDKMessage): SDKUsageInfo {
+  const raw = message as unknown as Record<string, unknown>;
+  const usage = raw.usage as { total_tokens?: number } | undefined;
+  return {
+    tokens: usage?.total_tokens,
+    costUsd: raw.total_cost_usd as number | undefined,
+    turns: raw.num_turns as number | undefined,
+  };
+}
+
+function handleSDKMessage(
+  message: SDKMessage,
+  label: string,
+  logger: ReviewLogger,
+  tracker?: ProgressTracker
+): void {
+  tracker?.handleSDKEvent(message as Parameters<ProgressTracker['handleSDKEvent']>[0]);
+
   switch (message.type) {
     case 'assistant': {
       const blocks = message.message?.content ?? [];
@@ -120,8 +151,9 @@ export async function reviewBatch(
   config: AppConfig,
   logger: ReviewLogger,
   projectContext?: string,
-  budgetUsd?: number
-): Promise<ReviewReport> {
+  budgetUsd?: number,
+  tracker?: ProgressTracker
+): Promise<BatchResult> {
   const fileList = files.map((f) => `- ${f}`).join('\n');
   const prompt = `请评审以下代码文件（基于目录 ${options.targetPath}）：\n\n${fileList}\n\n请逐一调用三个评审子智能体进行全面评审，然后汇总输出结构化报告。`;
 
@@ -135,6 +167,10 @@ export async function reviewBatch(
   logger.info(`[${label}] 开始评审 ${files.length} 个文件`);
   logger.fileOnly('debug', `[${label}] 文件列表:\n${fileList}`);
   logger.fileOnly('debug', `[${label}] Prompt:\n${prompt}`);
+
+  let batchTokens = 0;
+  let batchCost: number | undefined;
+  let batchTurns: number | undefined;
 
   try {
     const conversation = query({
@@ -161,26 +197,55 @@ export async function reviewBatch(
     let resultText = '';
 
     for await (const message of conversation) {
-      handleSDKMessage(message, label, logger);
+      handleSDKMessage(message, label, logger, tracker);
+
+      if (message.type === 'system' && message.subtype === 'task_progress') {
+        const { tokens } = extractSDKUsage(message);
+        if (tokens && tokens > batchTokens) batchTokens = tokens;
+      }
 
       if (message.type === 'result' && message.subtype === 'success') {
+        const usage = extractSDKUsage(message);
+        batchCost = usage.costUsd;
+        batchTurns = usage.turns;
         if (message.structured_output) {
           const parsed = validateReport(message.structured_output, label, logger);
-          if (parsed) return parsed;
+          if (parsed)
+            return {
+              report: parsed,
+              tokensUsed: batchTokens,
+              costUsd: batchCost,
+              turns: batchTurns,
+            };
         }
         resultText = message.result;
       }
     }
 
-    return parseReportFallback(resultText);
+    return {
+      report: parseReportFallback(resultText),
+      tokensUsed: batchTokens,
+      costUsd: batchCost,
+      turns: batchTurns,
+    };
   } catch (err) {
     if (ac?.signal.aborted) {
       logger.warn(`[${label}] 评审超时 (${options.timeoutMs / 1000}s)`);
-      return parseReportFallback('');
+      return {
+        report: parseReportFallback(''),
+        tokensUsed: batchTokens,
+        costUsd: batchCost,
+        turns: batchTurns,
+      };
     }
     const errMsg = err instanceof Error ? err.message : String(err);
     logger.error(`[${label}] 评审失败: ${truncate(errMsg)}`, `Full error: ${errMsg}`);
-    return parseReportFallback('');
+    return {
+      report: parseReportFallback(''),
+      tokensUsed: batchTokens,
+      costUsd: batchCost,
+      turns: batchTurns,
+    };
   } finally {
     if (timer) clearTimeout(timer);
   }
@@ -202,8 +267,9 @@ export async function quickScanBatch(
   config: AppConfig,
   logger: ReviewLogger,
   projectContext: string,
-  budgetUsd?: number
-): Promise<ReviewReport> {
+  budgetUsd?: number,
+  tracker?: ProgressTracker
+): Promise<BatchResult> {
   const fileList = files.map((f) => `- ${f}`).join('\n');
   const prompt = `快速扫描以下代码文件（基于目录 ${options.targetPath}），仅找出严重问题：\n\n${fileList}`;
 
@@ -216,6 +282,10 @@ export async function quickScanBatch(
   const label = `快扫-${files.length}f`;
   logger.info(`[${label}] 开始扫描 ${files.length} 个文件`);
   logger.fileOnly('debug', `[${label}] 文件列表:\n${fileList}`);
+
+  let batchTokens = 0;
+  let batchCost: number | undefined;
+  let batchTurns: number | undefined;
 
   try {
     const conversation = query({
@@ -241,26 +311,55 @@ export async function quickScanBatch(
     let resultText = '';
 
     for await (const message of conversation) {
-      handleSDKMessage(message, label, logger);
+      handleSDKMessage(message, label, logger, tracker);
+
+      if (message.type === 'system' && message.subtype === 'task_progress') {
+        const { tokens } = extractSDKUsage(message);
+        if (tokens && tokens > batchTokens) batchTokens = tokens;
+      }
 
       if (message.type === 'result' && message.subtype === 'success') {
+        const usage = extractSDKUsage(message);
+        batchCost = usage.costUsd;
+        batchTurns = usage.turns;
         if (message.structured_output) {
           const parsed = validateReport(message.structured_output, label, logger);
-          if (parsed) return parsed;
+          if (parsed)
+            return {
+              report: parsed,
+              tokensUsed: batchTokens,
+              costUsd: batchCost,
+              turns: batchTurns,
+            };
         }
         resultText = message.result;
       }
     }
 
-    return parseReportFallback(resultText);
+    return {
+      report: parseReportFallback(resultText),
+      tokensUsed: batchTokens,
+      costUsd: batchCost,
+      turns: batchTurns,
+    };
   } catch (err) {
     if (ac?.signal.aborted) {
       logger.warn(`[${label}] 快扫超时 (${options.timeoutMs / 1000}s)`);
-      return parseReportFallback('');
+      return {
+        report: parseReportFallback(''),
+        tokensUsed: batchTokens,
+        costUsd: batchCost,
+        turns: batchTurns,
+      };
     }
     const errMsg = err instanceof Error ? err.message : String(err);
     logger.error(`[${label}] 快扫失败: ${truncate(errMsg)}`, `Full error: ${errMsg}`);
-    return parseReportFallback('');
+    return {
+      report: parseReportFallback(''),
+      tokensUsed: batchTokens,
+      costUsd: batchCost,
+      turns: batchTurns,
+    };
   } finally {
     if (timer) clearTimeout(timer);
   }

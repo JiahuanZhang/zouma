@@ -224,3 +224,108 @@ export interface ReviewLog {
   detail: string | null;
   created_at: string;
 }
+
+// ========== Review Progress ==========
+
+export type ProgressStepType =
+  | 'task_start'
+  | 'task_end'
+  | 'phase_start'
+  | 'phase_end'
+  | 'batch_start'
+  | 'batch_end'
+  | 'agent_start'
+  | 'agent_end'
+  | 'tool_call';
+
+export type ProgressPhase =
+  | 'collect_files'
+  | 'analyze_deps'
+  | 'project_summary'
+  | 'quick_scan'
+  | 'deep_review'
+  | 'merge';
+
+export type ProgressStatus = 'running' | 'completed' | 'failed';
+
+export interface ReviewProgress {
+  id: number;
+  task_id: number;
+  step_type: ProgressStepType;
+  phase: ProgressPhase | null;
+  batch_index: number | null;
+  batch_total: number | null;
+  agent_name: string | null;
+  tool_name: string | null;
+  status: ProgressStatus | null;
+  strategy: string | null;
+  mode: string | null;
+  total_files: number | null;
+  file_count: number | null;
+  issue_count: number | null;
+  duration_ms: number | null;
+  tokens_used: number | null;
+  cost_usd: number | null;
+  detail: string | null;
+  created_at: string;
+}
+
+export interface TaskProgressSummary {
+  taskId: number;
+  strategy: string | null;
+  mode: string | null;
+  totalFiles: number;
+  totalBatches: number;
+  completedBatches: number;
+  failedBatches: number;
+  currentPhase: string | null;
+  overallStatus: ReviewTaskStatus;
+  startedAt: string | null;
+  endedAt: string | null;
+  totalDurationMs: number | null;
+  totalIssues: number;
+  totalTokens: number;
+  totalCostUsd: number;
+  phases: PhaseProgressItem[];
+  batches: BatchProgressItem[];
+}
+
+export interface PhaseProgressItem {
+  phase: ProgressPhase;
+  status: ProgressStatus;
+  startedAt: string;
+  endedAt: string | null;
+  durationMs: number | null;
+  batchCount: number;
+  completedBatches: number;
+  issueCount: number;
+}
+
+export interface BatchProgressItem {
+  phase: ProgressPhase;
+  batchIndex: number;
+  batchTotal: number;
+  status: ProgressStatus;
+  fileCount: number;
+  issueCount: number;
+  durationMs: number | null;
+  tokensUsed: number;
+  costUsd: number;
+  startedAt: string;
+  agents: AgentProgressItem[];
+}
+
+export interface AgentProgressItem {
+  agentName: string;
+  status: ProgressStatus;
+  durationMs: number | null;
+  tokensUsed: number;
+  toolCalls: ToolCallItem[];
+}
+
+export interface ToolCallItem {
+  toolName: string;
+  agentName: string | null;
+  detail: string | null;
+  createdAt: string;
+}

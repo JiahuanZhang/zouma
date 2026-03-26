@@ -3,6 +3,7 @@ import { DatabaseManager } from '@zouma/common';
 import { buildFromDB, preflightLlmCheck } from './configAdapter.js';
 import { createDbLogger } from './dbLogger.js';
 import { runReview } from './core/orchestrate.js';
+import { ProgressTracker } from './progressTracker.js';
 
 export class TaskRunner {
   private running = false;
@@ -16,8 +17,12 @@ export class TaskRunner {
     console.log(`[TaskRunner] 接收任务 #${task.id}: ${task.name}`);
 
     const logger = createDbLogger(task.id);
+    const tracker = new ProgressTracker(task.id);
 
+    const startTime = Date.now();
     try {
+      tracker.clearProgress();
+
       console.log(`[TaskRunner] 预检 LLM API 连通性...`);
       await preflightLlmCheck(task);
       console.log(`[TaskRunner] LLM API 预检通过`);
@@ -25,13 +30,22 @@ export class TaskRunner {
       this.updateStatus(task.id, 'running');
       console.log(`[TaskRunner] 开始执行任务 #${task.id}`);
 
-      const result = await this.executeReview(task, logger);
+      const result = await this.executeReview(task, logger, tracker);
 
-      this.updateStatus(task.id, 'completed', result);
+      tracker.taskEnd({
+        status: 'completed',
+        durationMs: Date.now() - startTime,
+        issueCount: result.issueCount,
+        tokensUsed: result.tokensUsed,
+        costUsd: result.costUsd,
+      });
+
+      this.updateStatus(task.id, 'completed', result.reportJson);
       console.log(`[TaskRunner] 任务 #${task.id} 执行完成`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const stack = error instanceof Error ? error.stack : undefined;
+      tracker.taskEnd({ status: 'failed', durationMs: Date.now() - startTime, issueCount: 0 });
       this.updateStatus(task.id, 'failed', message);
       logger.error(`任务执行失败: ${message}`, stack);
       console.error(`[TaskRunner] 任务 #${task.id} 执行失败:`, message);
@@ -43,14 +57,15 @@ export class TaskRunner {
 
   private async executeReview(
     task: ReviewTask,
-    logger: ReturnType<typeof createDbLogger>
-  ): Promise<string> {
+    logger: ReturnType<typeof createDbLogger>,
+    tracker: ProgressTracker
+  ): Promise<{ reportJson: string; issueCount: number; tokensUsed: number; costUsd: number }> {
     const { appConfig, reviewOptions } = buildFromDB(task);
 
     logger.info(`评审启动 | 目标: ${reviewOptions.targetPath} | 模型: ${appConfig.model}`);
 
     const startTime = Date.now();
-    const result = await runReview(reviewOptions, appConfig, logger);
+    const result = await runReview(reviewOptions, appConfig, logger, tracker);
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
     logger.info(
@@ -58,7 +73,12 @@ export class TaskRunner {
     );
     await logger.flush();
 
-    return JSON.stringify(result.report);
+    return {
+      reportJson: JSON.stringify(result.report),
+      issueCount: result.report.issues.length,
+      tokensUsed: result.tokensUsed,
+      costUsd: result.costUsd,
+    };
   }
 
   private updateStatus(taskId: number, status: string, result?: string): void {

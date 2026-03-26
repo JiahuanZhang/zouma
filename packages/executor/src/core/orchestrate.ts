@@ -1,7 +1,7 @@
 import pLimit from 'p-limit';
 import { scanFull, scanIncremental, splitBatches } from './scanner.js';
 import { loadState, saveState, getCurrentCommit, isGitRepo } from './state.js';
-import { reviewBatch, quickScanBatch } from './review.js';
+import { reviewBatch, quickScanBatch, type BatchResult } from './review.js';
 import { analyzeDependencies } from './dependency.js';
 import { generateProjectSummary, formatSummaryContext } from './summarize.js';
 import type {
@@ -11,6 +11,7 @@ import type {
   ReviewReport,
   ReviewIssue,
 } from './reviewTypes.js';
+import type { ProgressTracker } from '../progressTracker.js';
 
 export interface RunResult {
   report: ReviewReport;
@@ -18,17 +19,31 @@ export interface RunResult {
   batchCount: number;
   mode: string;
   strategy: string;
+  tokensUsed: number;
+  costUsd: number;
 }
 
 export async function runReview(
   options: ReviewOptions,
   config: AppConfig,
-  logger: ReviewLogger
+  logger: ReviewLogger,
+  tracker?: ProgressTracker
 ): Promise<RunResult> {
+  tracker?.taskStart({
+    strategy: options.strategy,
+    mode: options.mode,
+    totalFiles: 0,
+    totalBatches: 0,
+  });
+
+  tracker?.phaseStart('collect_files');
+  const t0 = Date.now();
   const files = await collectFiles(options, logger);
+  tracker?.phaseEnd('collect_files', { durationMs: Date.now() - t0, fileCount: files.length });
 
   if (files.length === 0) {
     logger.info('没有需要评审的文件。');
+    tracker?.taskEnd({ status: 'completed', durationMs: Date.now() - t0, issueCount: 0 });
     return emptyResult(options.mode, options.strategy);
   }
 
@@ -40,8 +55,8 @@ export async function runReview(
   }
 
   return effectiveStrategy === 'smart'
-    ? runReviewSmart(files, options, config, logger)
-    : runReviewSimple(files, options, config, logger);
+    ? runReviewSmart(files, options, config, logger, tracker)
+    : runReviewSimple(files, options, config, logger, tracker);
 }
 
 // ---------- Simple strategy ----------
@@ -50,7 +65,8 @@ async function runReviewSimple(
   files: string[],
   options: ReviewOptions,
   config: AppConfig,
-  logger: ReviewLogger
+  logger: ReviewLogger,
+  tracker?: ProgressTracker
 ): Promise<RunResult> {
   const { mode, batchSize, concurrency } = options;
 
@@ -61,24 +77,66 @@ async function runReviewSimple(
     `分为 ${batches.length} 个批次（每批最多 ${batchSize} 个文件），并发: ${concurrency}`
   );
 
+  tracker?.phaseStart('deep_review');
+  const phaseT0 = Date.now();
+  let totalTokens = 0;
+  let totalCost = 0;
+
   const limit = pLimit(concurrency);
   const tasks = batches.map((batch, idx) =>
     limit(async () => {
-      logger.info(`[批次 ${idx + 1}/${batches.length}] 开始评审 ${batch.length} 个文件...`);
+      const batchIdx = idx + 1;
+      logger.info(`[批次 ${batchIdx}/${batches.length}] 开始评审 ${batch.length} 个文件...`);
+      tracker?.batchStart('deep_review', batchIdx, batches.length, batch.length);
       const t0 = Date.now();
-      const result = await reviewBatch(batch, options, config, logger);
-      const safe = ensureReport(result);
-      const sec = ((Date.now() - t0) / 1000).toFixed(1);
-      logger.info(
-        `[批次 ${idx + 1}/${batches.length}] 完成 (${sec}s, issues=${safe.issues.length})`
-      );
-      return safe;
+      try {
+        const result = await reviewBatch(
+          batch,
+          options,
+          config,
+          logger,
+          undefined,
+          undefined,
+          tracker
+        );
+        const durationMs = Date.now() - t0;
+        const safe = ensureBatchResult(result);
+        const sec = (durationMs / 1000).toFixed(1);
+        logger.info(
+          `[批次 ${batchIdx}/${batches.length}] 完成 (${sec}s, issues=${safe.report.issues.length})`
+        );
+        tracker?.batchEnd('deep_review', batchIdx, {
+          status: 'completed',
+          durationMs,
+          issueCount: safe.report.issues.length,
+          tokensUsed: safe.tokensUsed,
+          costUsd: safe.costUsd,
+        });
+        totalTokens += safe.tokensUsed ?? 0;
+        totalCost += safe.costUsd ?? 0;
+        return safe.report;
+      } catch (err) {
+        tracker?.batchEnd('deep_review', batchIdx, {
+          status: 'failed',
+          durationMs: Date.now() - t0,
+          issueCount: 0,
+        });
+        throw err;
+      }
     })
   );
 
   const settled = await Promise.allSettled(tasks);
   const reports = collectSettled(settled, '批次', logger);
   const merged = mergeReports(reports);
+
+  tracker?.phaseEnd('deep_review', {
+    durationMs: Date.now() - phaseT0,
+    issueCount: merged.issues.length,
+  });
+
+  tracker?.phaseStart('merge');
+  tracker?.phaseEnd('merge', { durationMs: 0 });
 
   saveIfGit(options, files, logger);
 
@@ -88,6 +146,8 @@ async function runReviewSimple(
     batchCount: batches.length,
     mode,
     strategy: 'simple',
+    tokensUsed: totalTokens,
+    costUsd: totalCost,
   };
 }
 
@@ -97,66 +157,160 @@ async function runReviewSmart(
   files: string[],
   options: ReviewOptions,
   config: AppConfig,
-  logger: ReviewLogger
+  logger: ReviewLogger,
+  tracker?: ProgressTracker
 ): Promise<RunResult> {
   const { mode, targetPath, concurrency, maxGroupSize } = options;
+  let totalTokens = 0;
+  let totalCost = 0;
 
   logger.info(`发现 ${files.length} 个待评审文件，模式: ${mode}，策略: smart`);
 
+  // ── Phase 0a: dependency analysis ──
   logger.info('── 阶段 0: 项目分析 ──');
+  tracker?.phaseStart('analyze_deps');
+  let depT0 = Date.now();
   const { groups, edges } = analyzeDependencies(files, targetPath, maxGroupSize);
   logger.info(`依赖分析: ${groups.length} 个模块组`);
+  tracker?.phaseEnd('analyze_deps', {
+    durationMs: Date.now() - depT0,
+    detail: { groups: groups.length },
+  });
 
+  // ── Phase 0b: project summary ──
+  tracker?.phaseStart('project_summary');
+  depT0 = Date.now();
   const summary = await generateProjectSummary(files, targetPath, edges);
   const context = formatSummaryContext(summary);
   logger.info(`结构摘要: ${summary.totalLoc} 行有效代码`);
   logger.fileOnly('debug', `项目摘要:\n${context}`);
+  tracker?.phaseEnd('project_summary', {
+    durationMs: Date.now() - depT0,
+    detail: { totalLoc: summary.totalLoc },
+  });
 
   const limit = pLimit(concurrency);
   const totalBudget = options.maxBudgetUsd;
 
+  // ── Phase 1: quick scan ──
   logger.info(`── 阶段 1: 快速扫描 (${groups.length} 组, 并发 ${concurrency}) ──`);
+  tracker?.phaseStart('quick_scan');
+  const quickPhaseT0 = Date.now();
   const quickBudget = totalBudget ? (totalBudget * 0.2) / groups.length : undefined;
 
   const quickTasks = groups.map((group, idx) =>
     limit(async () => {
-      logger.info(`[快扫 ${idx + 1}/${groups.length}] ${group.length} 文件`);
+      const batchIdx = idx + 1;
+      logger.info(`[快扫 ${batchIdx}/${groups.length}] ${group.length} 文件`);
+      tracker?.batchStart('quick_scan', batchIdx, groups.length, group.length);
       const t0 = Date.now();
-      const r = await quickScanBatch(group, options, config, logger, context, quickBudget);
-      const safe = ensureReport(r);
-      const sec = ((Date.now() - t0) / 1000).toFixed(1);
-      logger.info(
-        `[快扫 ${idx + 1}/${groups.length}] 完成 (${sec}s, issues=${safe.issues.length})`
-      );
-      return safe;
+      try {
+        const r = await quickScanBatch(
+          group,
+          options,
+          config,
+          logger,
+          context,
+          quickBudget,
+          tracker
+        );
+        const durationMs = Date.now() - t0;
+        const safe = ensureBatchResult(r);
+        const sec = (durationMs / 1000).toFixed(1);
+        logger.info(
+          `[快扫 ${batchIdx}/${groups.length}] 完成 (${sec}s, issues=${safe.report.issues.length})`
+        );
+        tracker?.batchEnd('quick_scan', batchIdx, {
+          status: 'completed',
+          durationMs,
+          issueCount: safe.report.issues.length,
+          tokensUsed: safe.tokensUsed,
+          costUsd: safe.costUsd,
+        });
+        totalTokens += safe.tokensUsed ?? 0;
+        totalCost += safe.costUsd ?? 0;
+        return safe.report;
+      } catch (err) {
+        tracker?.batchEnd('quick_scan', batchIdx, {
+          status: 'failed',
+          durationMs: Date.now() - t0,
+          issueCount: 0,
+        });
+        throw err;
+      }
     })
   );
   const quickReports = await Promise.allSettled(quickTasks);
   const settledQuickReports = collectSettled(quickReports, '快扫', logger);
   const quickIssues = settledQuickReports.flatMap((r) => r.issues);
   logger.info(`快速扫描完成: ${quickIssues.length} 个严重问题`);
+  tracker?.phaseEnd('quick_scan', {
+    durationMs: Date.now() - quickPhaseT0,
+    issueCount: quickIssues.length,
+  });
 
+  // ── Phase 2: deep review ──
   logger.info(`── 阶段 2: 深度评审 (${groups.length} 组, 并发 ${concurrency}) ──`);
+  tracker?.phaseStart('deep_review');
+  const deepPhaseT0 = Date.now();
   const deepBudget = totalBudget ? (totalBudget * 0.8) / groups.length : undefined;
   const enrichedContext = enrichContext(context, quickIssues);
 
   const deepTasks = groups.map((group, idx) =>
     limit(async () => {
-      logger.info(`[深审 ${idx + 1}/${groups.length}] ${group.length} 文件`);
+      const batchIdx = idx + 1;
+      logger.info(`[深审 ${batchIdx}/${groups.length}] ${group.length} 文件`);
+      tracker?.batchStart('deep_review', batchIdx, groups.length, group.length);
       const t0 = Date.now();
-      const r = await reviewBatch(group, options, config, logger, enrichedContext, deepBudget);
-      const safe = ensureReport(r);
-      const sec = ((Date.now() - t0) / 1000).toFixed(1);
-      logger.info(
-        `[深审 ${idx + 1}/${groups.length}] 完成 (${sec}s, issues=${safe.issues.length})`
-      );
-      return safe;
+      try {
+        const r = await reviewBatch(
+          group,
+          options,
+          config,
+          logger,
+          enrichedContext,
+          deepBudget,
+          tracker
+        );
+        const durationMs = Date.now() - t0;
+        const safe = ensureBatchResult(r);
+        const sec = (durationMs / 1000).toFixed(1);
+        logger.info(
+          `[深审 ${batchIdx}/${groups.length}] 完成 (${sec}s, issues=${safe.report.issues.length})`
+        );
+        tracker?.batchEnd('deep_review', batchIdx, {
+          status: 'completed',
+          durationMs,
+          issueCount: safe.report.issues.length,
+          tokensUsed: safe.tokensUsed,
+          costUsd: safe.costUsd,
+        });
+        totalTokens += safe.tokensUsed ?? 0;
+        totalCost += safe.costUsd ?? 0;
+        return safe.report;
+      } catch (err) {
+        tracker?.batchEnd('deep_review', batchIdx, {
+          status: 'failed',
+          durationMs: Date.now() - t0,
+          issueCount: 0,
+        });
+        throw err;
+      }
     })
   );
   const deepReports = await Promise.allSettled(deepTasks);
   const settledDeepReports = collectSettled(deepReports, '深审', logger);
 
+  tracker?.phaseEnd('deep_review', {
+    durationMs: Date.now() - deepPhaseT0,
+    issueCount: settledDeepReports.reduce((s, r) => s + r.issues.length, 0),
+  });
+
+  // ── Merge ──
+  tracker?.phaseStart('merge');
+  const mergeT0 = Date.now();
   const merged = smartMergeReports(settledQuickReports, settledDeepReports);
+  tracker?.phaseEnd('merge', { durationMs: Date.now() - mergeT0 });
 
   saveIfGit(options, files, logger);
 
@@ -166,16 +320,23 @@ async function runReviewSmart(
     batchCount: groups.length,
     mode,
     strategy: 'smart',
+    tokensUsed: totalTokens,
+    costUsd: totalCost,
   };
 }
 
 // ---------- Helpers ----------
 
-function ensureReport(r: ReviewReport): ReviewReport {
+function ensureBatchResult(r: BatchResult): BatchResult {
   return {
-    summary: r?.summary ?? '评审未返回有效结果',
-    issues: Array.isArray(r?.issues) ? r.issues : [],
-    score: r?.score ?? { style: 0, logic: 0, robustness: 0, overall: 0 },
+    report: {
+      summary: r?.report?.summary ?? '评审未返回有效结果',
+      issues: Array.isArray(r?.report?.issues) ? r.report.issues : [],
+      score: r?.report?.score ?? { style: 0, logic: 0, robustness: 0, overall: 0 },
+    },
+    tokensUsed: r?.tokensUsed,
+    costUsd: r?.costUsd,
+    turns: r?.turns,
   };
 }
 
@@ -184,6 +345,11 @@ function collectSettled(
   label: string,
   logger: ReviewLogger
 ): ReviewReport[] {
+  const emptyReport: ReviewReport = {
+    summary: '评审未返回有效结果',
+    issues: [],
+    score: { style: 0, logic: 0, robustness: 0, overall: 0 },
+  };
   const reports: ReviewReport[] = [];
   for (const [i, r] of results.entries()) {
     if (r.status === 'fulfilled') {
@@ -191,7 +357,7 @@ function collectSettled(
     } else {
       const msg = r.reason instanceof Error ? r.reason.message : String(r.reason);
       logger.error(`[${label} ${i + 1}] 异常: ${msg}`);
-      reports.push(ensureReport(undefined as unknown as ReviewReport));
+      reports.push(emptyReport);
     }
   }
   return reports;
@@ -226,6 +392,8 @@ function emptyResult(mode: string, strategy: string): RunResult {
     batchCount: 0,
     mode,
     strategy,
+    tokensUsed: 0,
+    costUsd: 0,
   };
 }
 

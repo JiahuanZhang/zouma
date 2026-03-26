@@ -145,7 +145,19 @@ npm run format
 | GET | /api/review-tasks | 获取列表（支持分页，含关联仓库和配置名称） |
 | GET | /api/review-tasks/:id | 获取详情 |
 | GET | /api/review-tasks/:id/logs | 获取任务执行日志列表 |
+| GET | /api/review-tasks/:id/progress | 获取任务结构化进展（五级粒度：任务→阶段→批次→Agent→工具调用） |
 | POST | /api/review-tasks | 创建任务 |
 | POST | /api/review-tasks/:id/execute | 提交任务执行（状态置为 pending） |
 | PUT | /api/review-tasks/:id | 更新任务 |
 | DELETE | /api/review-tasks/:id | 删除任务 |
+
+## 数据库表
+
+| 表名 | 说明 |
+|------|------|
+| git_repo | Git 仓库配置 |
+| llm_config | LLM 模型配置 |
+| review_plan | 评审计划（定时触发等） |
+| review_task | 评审任务实例 |
+| review_log | 任务执行文本日志 |
+| review_progress | 任务执行结构化进展（事件追加模式，支持五级粒度可视化） |
