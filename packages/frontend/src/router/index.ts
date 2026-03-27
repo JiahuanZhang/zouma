@@ -31,6 +31,18 @@ const routes: RouteRecordRaw[] = [
         name: 'ReviewTasks',
         component: () => import('@/views/ReviewTaskView.vue'),
       },
+      {
+        path: 'review-tasks/:id/progress',
+        name: 'TaskProgress',
+        component: () => import('@/views/TaskProgressView.vue'),
+        props: true,
+      },
+      {
+        path: 'review-tasks/:id/issues',
+        name: 'TaskIssues',
+        component: () => import('@/views/TaskIssuesView.vue'),
+        props: true,
+      },
     ],
   },
 ];

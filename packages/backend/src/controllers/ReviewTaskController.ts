@@ -107,6 +107,23 @@ export class ReviewTaskController {
     res.json(ResponseHelper.success(item, '已提交执行'));
   }
 
+  static getIssues(req: Request, res: Response): void {
+    const id = Number(req.params.id);
+    if (!Validator.isPositiveInteger(id)) {
+      res.status(400).json(ResponseHelper.error('无效的 ID', 400));
+      return;
+    }
+    const task = ReviewTaskService.findById(id);
+    if (!task) {
+      res.status(404).json(ResponseHelper.error('未找到记录', 404));
+      return;
+    }
+    const severity = req.query.severity as string | undefined;
+    const category = req.query.category as string | undefined;
+    const issues = ReviewTaskService.findIssuesByTaskId(id, { severity, category });
+    res.json(ResponseHelper.success(issues));
+  }
+
   static getProgress(req: Request, res: Response): void {
     const id = Number(req.params.id);
     if (!Validator.isPositiveInteger(id)) {

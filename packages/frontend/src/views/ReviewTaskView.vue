@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance } from 'element-plus';
 import type {
@@ -7,11 +8,12 @@ import type {
   CreateReviewTaskDTO,
   GitRepo,
   LlmConfig,
-  ReviewLog,
 } from '@zouma/common';
 import { reviewTaskApi } from '@/api/reviewTask';
 import { gitRepoApi } from '@/api/gitRepo';
 import { llmConfigApi } from '@/api/llmConfig';
+
+const router = useRouter();
 
 const loading = ref(false);
 const tableData = ref<ReviewTaskWithRelations[]>([]);
@@ -26,11 +28,6 @@ const dialogVisible = ref(false);
 const dialogTitle = ref('');
 const editingId = ref<number | null>(null);
 const formRef = ref<FormInstance>();
-
-const logDialogVisible = ref(false);
-const logList = ref<ReviewLog[]>([]);
-const logLoading = ref(false);
-const logTaskName = ref('');
 
 const defaultForm = (): CreateReviewTaskDTO => ({
   name: '',
@@ -55,16 +52,6 @@ const statusMap: Record<string, { label: string; type: string }> = {
   running: { label: '执行中', type: 'warning' },
   completed: { label: '已完成', type: 'success' },
   failed: { label: '失败', type: 'danger' },
-};
-
-const logLevelType = (level: string): 'info' | 'success' | 'warning' | 'danger' => {
-  const map: Record<string, 'info' | 'success' | 'warning' | 'danger'> = {
-    debug: 'info',
-    info: 'success',
-    warn: 'warning',
-    error: 'danger',
-  };
-  return map[level] ?? 'info';
 };
 
 async function fetchData() {
@@ -134,19 +121,8 @@ async function handleDelete(row: ReviewTaskWithRelations) {
   fetchData();
 }
 
-async function handleViewLogs(row: ReviewTaskWithRelations) {
-  logTaskName.value = row.name;
-  logDialogVisible.value = true;
-  logLoading.value = true;
-  try {
-    const res = await reviewTaskApi.getLogs(row.id);
-    logList.value = res.data;
-  } catch {
-    logList.value = [];
-    ElMessage.error('获取日志失败');
-  } finally {
-    logLoading.value = false;
-  }
+function handleViewProgress(row: ReviewTaskWithRelations) {
+  router.push({ name: 'TaskProgress', params: { id: row.id } });
 }
 
 function handlePageChange(val: number) {
@@ -189,7 +165,7 @@ onMounted(() => {
       <el-table-column prop="created_at" label="创建时间" width="170" />
       <el-table-column label="操作" width="210" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" @click="handleViewLogs(row)">结果</el-button>
+          <el-button size="small" @click="handleViewProgress(row)">进展</el-button>
           <el-button size="small" @click="handleEdit(row)">编辑</el-button>
           <el-button size="small" type="danger" @click="handleDelete(row)">删除</el-button>
         </template>
@@ -240,32 +216,6 @@ onMounted(() => {
       </template>
     </el-dialog>
 
-    <el-dialog v-model="logDialogVisible" :title="`执行日志 - ${logTaskName}`" width="800px">
-      <el-table
-        v-loading="logLoading"
-        :data="logList"
-        stripe
-        border
-        max-height="500px"
-        size="small"
-      >
-        <el-table-column prop="id" label="ID" width="60" />
-        <el-table-column label="级别" width="80" align="center">
-          <template #default="{ row }">
-            <el-tag :type="logLevelType(row.level)" size="small" effect="plain">{{
-              row.level
-            }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="message" label="消息" min-width="250" show-overflow-tooltip />
-        <el-table-column prop="detail" label="详情" min-width="180" show-overflow-tooltip />
-        <el-table-column prop="created_at" label="时间" width="170" />
-      </el-table>
-      <div v-if="!logLoading && logList.length === 0" class="log-empty">暂无执行日志</div>
-      <template #footer>
-        <el-button @click="logDialogVisible = false">关闭</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -293,10 +243,4 @@ onMounted(() => {
   justify-content: flex-end;
 }
 
-.log-empty {
-  text-align: center;
-  color: #909399;
-  padding: 24px 0;
-  font-size: 14px;
-}
 </style>

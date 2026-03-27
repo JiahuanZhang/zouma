@@ -39,7 +39,11 @@ export async function runReview(
   tracker?.phaseStart('collect_files');
   const t0 = Date.now();
   const files = await collectFiles(options, logger);
-  tracker?.phaseEnd('collect_files', { durationMs: Date.now() - t0, fileCount: files.length });
+  tracker?.phaseEnd('collect_files', {
+    durationMs: Date.now() - t0,
+    fileCount: files.length,
+    detail: { files },
+  });
 
   if (files.length === 0) {
     logger.info('没有需要评审的文件。');
@@ -405,11 +409,12 @@ async function collectFiles(options: ReviewOptions, logger: ReviewLogger): Promi
     if (state) {
       logger.info(`增量模式：从 commit ${state.lastReviewedCommit.slice(0, 8)} 开始`);
       const files = await scanIncremental(targetPath, state.lastReviewedCommit, includeExtensions);
-      if (files.length > 0) return files;
-      logger.info('没有增量变更，退化为全库评审');
-    } else {
-      logger.info('未找到评审状态文件，退化为全库评审');
+      if (files.length === 0) {
+        logger.info('自上次评审以来没有文件变更，无需评审');
+      }
+      return files;
     }
+    logger.info('未找到评审状态文件，回退为全量评审');
   }
 
   return scanFull(options);

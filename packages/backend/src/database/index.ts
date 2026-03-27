@@ -176,4 +176,22 @@ export function initializeDatabase(): void {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_review_progress_task_id ON review_progress(task_id)
   `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS review_issues (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id     INTEGER NOT NULL REFERENCES review_task(id) ON DELETE CASCADE,
+      severity    TEXT NOT NULL CHECK(severity IN ('error','warning','info')),
+      category    TEXT NOT NULL CHECK(category IN ('style','logic','robustness')),
+      file        TEXT NOT NULL,
+      line        INTEGER,
+      description TEXT NOT NULL,
+      suggestion  TEXT NOT NULL,
+      created_at  TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_review_issues_task_id ON review_issues(task_id)
+  `);
 }

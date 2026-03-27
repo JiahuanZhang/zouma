@@ -22,6 +22,7 @@ export class TaskRunner {
     const startTime = Date.now();
     try {
       tracker.clearProgress();
+      this.clearIssues(task.id);
 
       console.log(`[TaskRunner] 预检 LLM API 连通性...`);
       await preflightLlmCheck(task);
@@ -40,6 +41,7 @@ export class TaskRunner {
         costUsd: result.costUsd,
       });
 
+      this.saveIssues(task.id, result.reportJson);
       this.updateStatus(task.id, 'completed', result.reportJson);
       console.log(`[TaskRunner] 任务 #${task.id} 执行完成`);
     } catch (error) {
@@ -79,6 +81,35 @@ export class TaskRunner {
       tokensUsed: result.tokensUsed,
       costUsd: result.costUsd,
     };
+  }
+
+  private clearIssues(taskId: number): void {
+    const db = DatabaseManager.getDatabase();
+    db.prepare('DELETE FROM review_issues WHERE task_id = ?').run(taskId);
+  }
+
+  private saveIssues(taskId: number, reportJson: string): void {
+    try {
+      const report = JSON.parse(reportJson) as { issues?: Array<{
+        severity: string; category: string; file: string;
+        line?: number; description: string; suggestion: string;
+      }> };
+      if (!report.issues?.length) return;
+
+      const db = DatabaseManager.getDatabase();
+      const insert = db.prepare(
+        `INSERT INTO review_issues (task_id, severity, category, file, line, description, suggestion)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      );
+      const batch = db.transaction((issues: typeof report.issues) => {
+        for (const i of issues!) {
+          insert.run(taskId, i.severity, i.category, i.file, i.line ?? null, i.description, i.suggestion);
+        }
+      });
+      batch(report.issues);
+    } catch (err) {
+      console.warn(`[TaskRunner] saveIssues failed for task ${taskId}:`, err);
+    }
   }
 
   private updateStatus(taskId: number, status: string, result?: string): void {

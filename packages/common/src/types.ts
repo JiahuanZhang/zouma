@@ -275,6 +275,7 @@ export interface TaskProgressSummary {
   strategy: string | null;
   mode: string | null;
   totalFiles: number;
+  fileList: string[];
   totalBatches: number;
   completedBatches: number;
   failedBatches: number;
@@ -328,4 +329,21 @@ export interface ToolCallItem {
   agentName: string | null;
   detail: string | null;
   createdAt: string;
+}
+
+// ========== Review Issues ==========
+
+export type IssueSeverity = 'error' | 'warning' | 'info';
+export type IssueCategory = 'style' | 'logic' | 'robustness';
+
+export interface ReviewIssueRecord {
+  id: number;
+  task_id: number;
+  severity: IssueSeverity;
+  category: IssueCategory;
+  file: string;
+  line: number | null;
+  description: string;
+  suggestion: string;
+  created_at: string;
 }

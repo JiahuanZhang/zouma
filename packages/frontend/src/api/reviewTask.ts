@@ -4,6 +4,8 @@ import type {
   UpdateReviewTaskDTO,
   PaginatedResult,
   ReviewLog,
+  TaskProgressSummary,
+  ReviewIssueRecord,
 } from '@zouma/common';
 import { http } from './http';
 
@@ -32,5 +34,15 @@ export const reviewTaskApi = {
   },
   getLogs(taskId: number) {
     return http.get<ReviewLog[]>(`${BASE}/${taskId}/logs`);
+  },
+  getProgress(taskId: number) {
+    return http.get<TaskProgressSummary>(`${BASE}/${taskId}/progress`);
+  },
+  getIssues(taskId: number, filters?: { severity?: string; category?: string }) {
+    const params = new URLSearchParams();
+    if (filters?.severity) params.set('severity', filters.severity);
+    if (filters?.category) params.set('category', filters.category);
+    const qs = params.toString();
+    return http.get<ReviewIssueRecord[]>(`${BASE}/${taskId}/issues${qs ? `?${qs}` : ''}`);
   },
 };

@@ -13,6 +13,7 @@ import type {
   ToolCallItem,
   ProgressPhase,
   ProgressStatus,
+  ReviewIssueRecord,
 } from '@zouma/common';
 import { DatabaseManager } from '../database/index.js';
 
@@ -128,6 +129,28 @@ export class ReviewTaskService {
     return ReviewTaskService.findById(id);
   }
 
+  static findIssuesByTaskId(
+    taskId: number,
+    filters?: { severity?: string; category?: string }
+  ): ReviewIssueRecord[] {
+    const db = DatabaseManager.getDatabase();
+    const conditions = ['task_id = ?'];
+    const params: unknown[] = [taskId];
+
+    if (filters?.severity) {
+      conditions.push('severity = ?');
+      params.push(filters.severity);
+    }
+    if (filters?.category) {
+      conditions.push('category = ?');
+      params.push(filters.category);
+    }
+
+    return db
+      .prepare(`SELECT * FROM review_issues WHERE ${conditions.join(' AND ')} ORDER BY id ASC`)
+      .all(...params) as ReviewIssueRecord[];
+  }
+
   static findProgressByTaskId(taskId: number): TaskProgressSummary | null {
     const db = DatabaseManager.getDatabase();
     const task = db.prepare('SELECT * FROM review_task WHERE id = ?').get(taskId) as
@@ -240,7 +263,8 @@ function buildBatchAgents(
   agentRows: ReviewProgress[],
   toolRows: ReviewProgress[],
   phase: ProgressPhase,
-  batchIndex: number
+  batchIndex: number,
+  batchDurationMs?: number | null
 ): AgentProgressItem[] {
   const agentPairs = buildAgentPairs(agentRows, phase, batchIndex);
   const agents: AgentProgressItem[] = agentPairs.map((pair) => ({
@@ -263,7 +287,7 @@ function buildBatchAgents(
     agents.unshift({
       agentName: 'orchestrator',
       status: 'completed',
-      durationMs: null,
+      durationMs: batchDurationMs ?? null,
       tokensUsed: 0,
       toolCalls: orphanTools,
     });
@@ -284,18 +308,19 @@ function buildBatches(
     const phase = ref.phase as ProgressPhase;
     const batchIndex = ref.batch_index ?? 0;
 
+    const batchDurationMs = endRow?.duration_ms ?? null;
     batches.push({
       phase,
       batchIndex,
-      batchTotal: ref.batch_total ?? 0,
+      batchTotal: startRow?.batch_total ?? endRow?.batch_total ?? 0,
       status: resolveStatus(endRow, 'completed'),
       fileCount: startRow?.file_count ?? 0,
       issueCount: endRow?.issue_count ?? 0,
-      durationMs: endRow?.duration_ms ?? null,
-      tokensUsed: endRow?.tokens_used ?? 0,
-      costUsd: endRow?.cost_usd ?? 0,
+      durationMs: batchDurationMs,
+      tokensUsed: (endRow?.tokens_used ?? 0) || (startRow?.tokens_used ?? 0),
+      costUsd: (endRow?.cost_usd ?? 0) || (startRow?.cost_usd ?? 0),
       startedAt: startRow?.created_at ?? '',
-      agents: buildBatchAgents(agentRows, toolRows, phase, batchIndex),
+      agents: buildBatchAgents(agentRows, toolRows, phase, batchIndex, batchDurationMs),
     });
   }
   return batches;
@@ -314,11 +339,26 @@ function aggregateProgress(
   const failedBatches = batches.filter((b) => b.status === 'failed').length;
   const lastPhaseRunning = phases.find((p) => p.status === 'running');
 
+  let totalFiles = taskStartRow?.total_files ?? 0;
+  const collectPhase = phaseMap.get('collect_files');
+  if (totalFiles === 0) {
+    totalFiles = collectPhase?.endRow?.file_count ?? 0;
+  }
+
+  let fileList: string[] = [];
+  if (collectPhase?.endRow?.detail) {
+    try {
+      const parsed = JSON.parse(collectPhase.endRow.detail);
+      if (Array.isArray(parsed.files)) fileList = parsed.files;
+    } catch { /* ignore */ }
+  }
+
   return {
     taskId,
     strategy: taskStartRow?.strategy ?? null,
     mode: taskStartRow?.mode ?? null,
-    totalFiles: taskStartRow?.total_files ?? 0,
+    totalFiles,
+    fileList,
     totalBatches: batches.length,
     completedBatches,
     failedBatches,

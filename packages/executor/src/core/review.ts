@@ -58,9 +58,19 @@ interface SDKUsageInfo {
 
 function extractSDKUsage(message: SDKMessage): SDKUsageInfo {
   const raw = message as unknown as Record<string, unknown>;
-  const usage = raw.usage as { total_tokens?: number } | undefined;
+  const usage = raw.usage as Record<string, number> | undefined;
+
+  let tokens: number | undefined;
+  if (usage) {
+    if (typeof usage.total_tokens === 'number') {
+      tokens = usage.total_tokens;
+    } else if (typeof usage.input_tokens === 'number' || typeof usage.output_tokens === 'number') {
+      tokens = (usage.input_tokens ?? 0) + (usage.output_tokens ?? 0);
+    }
+  }
+
   return {
-    tokens: usage?.total_tokens,
+    tokens,
     costUsd: raw.total_cost_usd as number | undefined,
     turns: raw.num_turns as number | undefined,
   };
@@ -204,21 +214,24 @@ export async function reviewBatch(
         if (tokens && tokens > batchTokens) batchTokens = tokens;
       }
 
-      if (message.type === 'result' && message.subtype === 'success') {
+      if (message.type === 'result') {
         const usage = extractSDKUsage(message);
+        if (usage.tokens && usage.tokens > batchTokens) batchTokens = usage.tokens;
         batchCost = usage.costUsd;
         batchTurns = usage.turns;
-        if (message.structured_output) {
-          const parsed = validateReport(message.structured_output, label, logger);
-          if (parsed)
-            return {
-              report: parsed,
-              tokensUsed: batchTokens,
-              costUsd: batchCost,
-              turns: batchTurns,
-            };
+        if (message.subtype === 'success') {
+          if (message.structured_output) {
+            const parsed = validateReport(message.structured_output, label, logger);
+            if (parsed)
+              return {
+                report: parsed,
+                tokensUsed: batchTokens,
+                costUsd: batchCost,
+                turns: batchTurns,
+              };
+          }
+          resultText = message.result;
         }
-        resultText = message.result;
       }
     }
 
@@ -318,21 +331,24 @@ export async function quickScanBatch(
         if (tokens && tokens > batchTokens) batchTokens = tokens;
       }
 
-      if (message.type === 'result' && message.subtype === 'success') {
+      if (message.type === 'result') {
         const usage = extractSDKUsage(message);
+        if (usage.tokens && usage.tokens > batchTokens) batchTokens = usage.tokens;
         batchCost = usage.costUsd;
         batchTurns = usage.turns;
-        if (message.structured_output) {
-          const parsed = validateReport(message.structured_output, label, logger);
-          if (parsed)
-            return {
-              report: parsed,
-              tokensUsed: batchTokens,
-              costUsd: batchCost,
-              turns: batchTurns,
-            };
+        if (message.subtype === 'success') {
+          if (message.structured_output) {
+            const parsed = validateReport(message.structured_output, label, logger);
+            if (parsed)
+              return {
+                report: parsed,
+                tokensUsed: batchTokens,
+                costUsd: batchCost,
+                turns: batchTurns,
+              };
+          }
+          resultText = message.result;
         }
-        resultText = message.result;
       }
     }
 
