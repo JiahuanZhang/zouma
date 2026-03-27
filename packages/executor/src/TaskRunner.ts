@@ -104,7 +104,9 @@ export class TaskRunner {
       );
       const batch = db.transaction((issues: typeof validIssues) => {
         for (const i of issues!) {
-          insert.run(taskId, i.severity ?? 'info', i.category ?? 'general', i.file, i.line ?? null, i.description, i.suggestion ?? '');
+          const sev = (['error', 'warning', 'info'].includes(i.severity)) ? i.severity : 'info';
+          const cat = (['style', 'logic', 'robustness'].includes(i.category)) ? i.category : 'logic';
+          insert.run(taskId, sev, cat, i.file, i.line ?? null, i.description, i.suggestion ?? '');
         }
       });
       batch(validIssues);
