@@ -94,19 +94,20 @@ export class TaskRunner {
         severity: string; category: string; file: string;
         line?: number; description: string; suggestion: string;
       }> };
-      if (!report.issues?.length) return;
+      const validIssues = report.issues?.filter(i => i.file && i.description);
+      if (!validIssues?.length) return;
 
       const db = DatabaseManager.getDatabase();
       const insert = db.prepare(
         `INSERT INTO review_issues (task_id, severity, category, file, line, description, suggestion)
          VALUES (?, ?, ?, ?, ?, ?, ?)`
       );
-      const batch = db.transaction((issues: typeof report.issues) => {
+      const batch = db.transaction((issues: typeof validIssues) => {
         for (const i of issues!) {
-          insert.run(taskId, i.severity, i.category, i.file, i.line ?? null, i.description, i.suggestion);
+          insert.run(taskId, i.severity ?? 'info', i.category ?? 'general', i.file, i.line ?? null, i.description, i.suggestion ?? '');
         }
       });
-      batch(report.issues);
+      batch(validIssues);
     } catch (err) {
       console.warn(`[TaskRunner] saveIssues failed for task ${taskId}:`, err);
     }
