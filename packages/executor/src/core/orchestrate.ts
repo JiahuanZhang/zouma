@@ -91,7 +91,7 @@ async function runReviewSimple(
     limit(async () => {
       const batchIdx = idx + 1;
       logger.info(`[批次 ${batchIdx}/${batches.length}] 开始评审 ${batch.length} 个文件...`);
-      tracker?.batchStart('deep_review', batchIdx, batches.length, batch.length);
+      tracker?.batchStart('deep_review', batchIdx, batches.length, batch.length, { files: batch });
       const t0 = Date.now();
       try {
         const result = await reviewBatch(
@@ -178,7 +178,10 @@ async function runReviewSmart(
   logger.info(`依赖分析: ${groups.length} 个模块组`);
   tracker?.phaseEnd('analyze_deps', {
     durationMs: Date.now() - depT0,
-    detail: { groups: groups.length },
+    detail: {
+      groupCount: groups.length,
+      groups: groups.map((g, i) => ({ index: i + 1, files: g })),
+    },
   });
 
   // ── Phase 0b: project summary ──
@@ -190,7 +193,10 @@ async function runReviewSmart(
   logger.fileOnly('debug', `项目摘要:\n${context}`);
   tracker?.phaseEnd('project_summary', {
     durationMs: Date.now() - depT0,
-    detail: { totalLoc: summary.totalLoc },
+    detail: {
+      totalLoc: summary.totalLoc,
+      files: summary.files.map((f) => ({ file: f.file, loc: f.loc })),
+    },
   });
 
   const limit = pLimit(concurrency);
@@ -206,7 +212,7 @@ async function runReviewSmart(
     limit(async () => {
       const batchIdx = idx + 1;
       logger.info(`[快扫 ${batchIdx}/${groups.length}] ${group.length} 文件`);
-      tracker?.batchStart('quick_scan', batchIdx, groups.length, group.length);
+      tracker?.batchStart('quick_scan', batchIdx, groups.length, group.length, { files: group });
       const t0 = Date.now();
       try {
         const r = await quickScanBatch(
@@ -264,7 +270,7 @@ async function runReviewSmart(
     limit(async () => {
       const batchIdx = idx + 1;
       logger.info(`[深审 ${batchIdx}/${groups.length}] ${group.length} 文件`);
-      tracker?.batchStart('deep_review', batchIdx, groups.length, group.length);
+      tracker?.batchStart('deep_review', batchIdx, groups.length, group.length, { files: group });
       const t0 = Date.now();
       try {
         const r = await reviewBatch(

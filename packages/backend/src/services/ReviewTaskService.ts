@@ -236,6 +236,15 @@ function toToolCallItem(t: ReviewProgress): ToolCallItem {
   };
 }
 
+function parseDetail(row: ReviewProgress | undefined): Record<string, unknown> | null {
+  if (!row?.detail) return null;
+  try {
+    return JSON.parse(row.detail) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
 function buildPhases(
   phaseMap: Map<string, PairEntry>,
   batchMap: Map<string, PairEntry>
@@ -254,6 +263,7 @@ function buildPhases(
       batchCount: phaseBatches.length,
       completedBatches: phaseBatches.filter((b) => b.endRow?.status === 'completed').length,
       issueCount: endRow?.issue_count ?? 0,
+      detail: parseDetail(endRow),
     });
   }
   return phases;
@@ -309,12 +319,15 @@ function buildBatches(
     const batchIndex = ref.batch_index ?? 0;
 
     const batchDurationMs = endRow?.duration_ms ?? null;
+    const startDetail = parseDetail(startRow);
+    const fileList = Array.isArray(startDetail?.files) ? (startDetail.files as string[]) : [];
     batches.push({
       phase,
       batchIndex,
       batchTotal: startRow?.batch_total ?? endRow?.batch_total ?? 0,
       status: resolveStatus(endRow, 'completed'),
       fileCount: startRow?.file_count ?? 0,
+      fileList,
       issueCount: endRow?.issue_count ?? 0,
       durationMs: batchDurationMs,
       tokensUsed: (endRow?.tokens_used ?? 0) || (startRow?.tokens_used ?? 0),

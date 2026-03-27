@@ -304,6 +304,7 @@ export interface PhaseProgressItem {
   batchCount: number;
   completedBatches: number;
   issueCount: number;
+  detail: Record<string, unknown> | null;
 }
 
 export interface BatchProgressItem {
@@ -312,6 +313,7 @@ export interface BatchProgressItem {
   batchTotal: number;
   status: ProgressStatus;
   fileCount: number;
+  fileList: string[];
   issueCount: number;
   durationMs: number | null;
   tokensUsed: number;

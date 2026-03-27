@@ -1,8 +1,6 @@
 import { DatabaseManager } from '@zouma/common';
 import type { ProgressPhase, ProgressStatus } from '@zouma/common';
 
-const KNOWN_AGENTS = new Set(['style-reviewer', 'logic-reviewer', 'robustness-reviewer']);
-
 export class ProgressTracker {
   private db = DatabaseManager.getDatabase();
   private insertStmt;
@@ -95,7 +93,13 @@ export class ProgressTracker {
 
   // ── Batch level ──
 
-  batchStart(phase: ProgressPhase, index: number, total: number, fileCount: number): void {
+  batchStart(
+    phase: ProgressPhase,
+    index: number,
+    total: number,
+    fileCount: number,
+    detail?: Record<string, unknown>
+  ): void {
     this.currentPhase = phase;
     this.currentBatchIndex = index;
     this.insert({
@@ -105,6 +109,7 @@ export class ProgressTracker {
       batchTotal: total,
       fileCount,
       status: 'running',
+      detail: detail ? JSON.stringify(detail) : undefined,
     });
   }
 
@@ -191,12 +196,6 @@ export class ProgressTracker {
   }): void {
     switch (message.type) {
       case 'system': {
-        if (message.subtype === 'task_started') {
-          const agentName = this.resolveAgentName(message.description);
-          if (agentName) {
-            this.agentStart(agentName);
-          }
-        }
         break;
       }
       case 'assistant': {
@@ -224,15 +223,6 @@ export class ProgressTracker {
     }
   }
 
-  private resolveAgentName(description?: string): string | null {
-    if (!description) return null;
-    const lower = description.toLowerCase();
-    for (const name of KNOWN_AGENTS) {
-      if (lower.includes(name)) return name;
-    }
-    return null;
-  }
-
   private summarizeToolInput(
     toolName: string,
     input: unknown
@@ -246,8 +236,6 @@ export class ProgressTracker {
         return { pattern: obj.regex ?? obj.pattern, path: obj.path };
       case 'Glob':
         return { pattern: obj.pattern, path: obj.path };
-      case 'Agent':
-        return { agent: obj.agent_name ?? obj.name };
       default:
         return { tool: toolName };
     }

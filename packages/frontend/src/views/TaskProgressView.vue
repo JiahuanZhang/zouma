@@ -32,19 +32,9 @@ const PHASE_LABEL: Record<string, string> = {
   merge: '合并报告',
 };
 
-const AGENT_LABEL: Record<string, string> = {
-  'style-reviewer': '风格审查',
-  'logic-reviewer': '逻辑审查',
-  'robustness-reviewer': '健壮性审查',
-  orchestrator: '编排器',
-};
+const AGENT_LABEL: Record<string, string> = {};
 
-const AGENT_COLOR: Record<string, string> = {
-  'style-reviewer': '#409EFF',
-  'logic-reviewer': '#67C23A',
-  'robustness-reviewer': '#E6A23C',
-  orchestrator: '#909399',
-};
+const AGENT_COLOR: Record<string, string> = {};
 
 const SMART_PHASES: ProgressPhase[] = [
   'collect_files',
@@ -155,6 +145,28 @@ function toolSummary(calls: ToolCallItem[]): string {
   const counts = new Map<string, number>();
   for (const c of calls) counts.set(c.toolName, (counts.get(c.toolName) ?? 0) + 1);
   return [...counts].map(([n, c]) => `${n} x${c}`).join(', ');
+}
+
+function phaseFiles(step: { phase: string; data: PhaseProgressItem | null }): string[] {
+  const d = step.data?.detail;
+  if (!d) return [];
+  if (step.phase === 'collect_files') {
+    return Array.isArray(d.files) ? (d.files as string[]) : [];
+  }
+  if (step.phase === 'project_summary') {
+    return Array.isArray(d.files) ? (d.files as { file: string }[]).map((f) => f.file) : [];
+  }
+  return [];
+}
+
+function phaseGroups(step: {
+  phase: string;
+  data: PhaseProgressItem | null;
+}): { index: number; files: string[] }[] {
+  if (step.phase !== 'analyze_deps') return [];
+  const d = step.data?.detail;
+  if (!d || !Array.isArray(d.groups)) return [];
+  return d.groups as { index: number; files: string[] }[];
 }
 
 // ── Data ──
@@ -396,6 +408,13 @@ watch(
                   <span>{{ formatDuration(batch.durationMs) }}</span>
                 </div>
 
+                <!-- Batch file list -->
+                <div v-if="batch.fileList.length > 0" class="batch-file-section">
+                  <div class="phase-file-list">
+                    <div v-for="f in batch.fileList" :key="f" class="phase-file-item">{{ f }}</div>
+                  </div>
+                </div>
+
                 <!-- Agents -->
                 <div v-if="batch.agents.length > 0" class="agent-section">
                   <div class="agent-section-title">Agent 执行详情</div>
@@ -438,10 +457,35 @@ watch(
 
             <!-- Simple phase (no batches) -->
             <div v-else-if="step.data" class="phase-simple">
-              耗时 {{ formatDuration(step.data.durationMs) }}
-              <template v-if="step.data.issueCount > 0">
-                &middot; 发现 {{ step.data.issueCount }} 个问题
-              </template>
+              <div>
+                耗时 {{ formatDuration(step.data.durationMs) }}
+                <template v-if="step.data.issueCount > 0">
+                  &middot; 发现 {{ step.data.issueCount }} 个问题
+                </template>
+              </div>
+
+              <!-- collect_files / project_summary: file list -->
+              <div v-if="phaseFiles(step).length > 0" class="phase-file-section">
+                <div class="phase-file-header">
+                  <span class="phase-file-count">{{ phaseFiles(step).length }} 个文件</span>
+                </div>
+                <div class="phase-file-list">
+                  <div v-for="f in phaseFiles(step)" :key="f" class="phase-file-item">{{ f }}</div>
+                </div>
+              </div>
+
+              <!-- analyze_deps: groups -->
+              <div v-if="phaseGroups(step).length > 0" class="phase-file-section">
+                <div class="phase-file-header">
+                  <span class="phase-file-count">{{ phaseGroups(step).length }} 个模块组</span>
+                </div>
+                <div v-for="g in phaseGroups(step)" :key="g.index" class="dep-group">
+                  <div class="dep-group-title">组 {{ g.index }} ({{ g.files.length }} 文件)</div>
+                  <div class="phase-file-list">
+                    <div v-for="f in g.files" :key="f" class="phase-file-item">{{ f }}</div>
+                  </div>
+                </div>
+              </div>
             </div>
           </el-collapse-item>
         </el-collapse>
@@ -747,6 +791,63 @@ watch(
   color: #a8abb2;
   margin-top: 4px;
   padding-left: 14px;
+}
+
+/* ── Phase file list ── */
+.phase-file-section {
+  margin-top: 10px;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: #fafbfc;
+}
+
+.phase-file-header {
+  margin-bottom: 6px;
+}
+
+.phase-file-count {
+  font-size: 12px;
+  color: #606266;
+  font-weight: 500;
+}
+
+.phase-file-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.phase-file-item {
+  font-size: 12px;
+  color: #606266;
+  padding: 2px 0;
+  font-family: 'Menlo', 'Consolas', monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dep-group {
+  margin-bottom: 8px;
+}
+
+.dep-group:last-child {
+  margin-bottom: 0;
+}
+
+.dep-group-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: #303133;
+  margin-bottom: 4px;
+}
+
+.batch-file-section {
+  margin-top: 10px;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  padding: 8px 12px;
+  background: #fff;
 }
 
 /* ── Misc ── */

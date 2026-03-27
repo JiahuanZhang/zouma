@@ -1,5 +1,4 @@
 import { query, SDKMessage } from '@anthropic-ai/claude-agent-sdk';
-import { createReviewAgents } from './agents.js';
 import {
   REVIEW_REPORT_SCHEMA,
   ReviewReportSchema,
@@ -24,23 +23,41 @@ export function buildEnv(config: AppConfig): Record<string, string> {
   return env;
 }
 
-function buildOrchestratorPrompt(projectContext?: string): string {
+function buildReviewPrompt(projectContext?: string): string {
   const contextSection = projectContext
     ? `\n## 项目全局上下文\n以下是整个项目的结构摘要，请在评审时参考跨文件的依赖关系：\n\n${projectContext}\n`
     : '';
 
-  return `你是一名代码评审编排专家。你需要协调三个专业评审子智能体对代码进行全面评审。
+  return `你是一名资深全栈代码评审专家，同时精通代码风格、逻辑正确性和健壮性三个维度的审查。
 ${contextSection}
 工作流程：
-1. 使用 Read / Grep / Glob 工具快速了解待评审文件的结构
-2. 调用 "style-reviewer" 子智能体，让它评审代码风格
-3. 调用 "logic-reviewer" 子智能体，让它评审逻辑错误
-4. 调用 "robustness-reviewer" 子智能体，让它评审健壮性
-5. 汇总三个子智能体的评审结果，生成最终评审报告
+1. 使用 Read / Grep / Glob 工具阅读待评审文件的完整代码
+2. 从以下三个维度进行全面评审，然后汇总输出结构化报告
 
-注意事项：
-- 将待评审的文件列表传递给每个子智能体
-- 确保每个子智能体都能获取到完整的文件路径以便使用 Read 工具
+## 维度一：代码风格
+1. **命名规范** - 变量、函数、类、文件的命名是否清晰且符合语言惯例（camelCase / snake_case / PascalCase）
+2. **代码格式** - 缩进一致性、行长度、空行使用、括号风格
+3. **Import 组织** - 是否按标准分组排序（内置 → 第三方 → 本地），是否有未使用的 import
+4. **注释质量** - 是否有必要注释、注释是否准确、是否有无意义的注释
+5. **代码重复** - 是否存在可提取为公共函数/常量的重复代码
+
+## 维度二：逻辑正确性
+1. **条件判断** - if/switch 分支是否完整，是否有遗漏的 else/default 分支
+2. **边界条件** - 循环终止条件、数组越界、off-by-one 错误
+3. **异步与并发** - Promise 是否正确处理、是否有竞态条件、async/await 使用是否正确
+4. **类型安全** - 隐式类型转换风险、any 类型滥用、类型断言安全性
+5. **算法正确性** - 逻辑流程是否符合预期、数据变换是否正确、状态管理是否一致
+
+## 维度三：健壮性
+1. **空值安全** - 是否对可能为 null/undefined 的值做了检查，可选链和空值合并的使用
+2. **异常处理** - try-catch 是否覆盖关键路径、错误是否被正确传播、是否有吞掉异常的情况
+3. **输入验证** - 函数参数是否做了有效性检查、外部输入（API / 用户输入）是否有验证
+4. **资源管理** - 文件句柄、数据库连接、定时器是否正确关闭/清理
+5. **安全隐患** - XSS、SQL 注入、路径遍历、敏感信息泄漏、不安全的正则表达式
+
+## 输出要求
+- 列出发现的每个问题，包含文件名、行号（如果能定位）、问题描述和改进建议
+- severity 标注：error（严重 bug / 安全 / 崩溃风险）、warning（潜在风险 / 建议改进）、info（微小建议）
 - 最终输出必须是结构化的 JSON 评审报告，包含 summary、issues、score
 - score 中各项评分为 1-10 分（10 为最佳）
 - 用中文回复所有内容`;
@@ -165,9 +182,8 @@ export async function reviewBatch(
   tracker?: ProgressTracker
 ): Promise<BatchResult> {
   const fileList = files.map((f) => `- ${f}`).join('\n');
-  const prompt = `请评审以下代码文件（基于目录 ${options.targetPath}）：\n\n${fileList}\n\n请逐一调用三个评审子智能体进行全面评审，然后汇总输出结构化报告。`;
+  const prompt = `请评审以下代码文件（基于目录 ${options.targetPath}）：\n\n${fileList}\n\n请从代码风格、逻辑正确性、健壮性三个维度进行全面评审，然后输出结构化报告。`;
 
-  const agents = createReviewAgents(config.model, projectContext);
   const env = buildEnv(config);
   const useTimeout = options.timeoutMs > 0;
   const ac = useTimeout ? new AbortController() : undefined;
@@ -187,9 +203,8 @@ export async function reviewBatch(
       prompt,
       options: {
         cwd: options.targetPath,
-        agents,
-        systemPrompt: buildOrchestratorPrompt(projectContext),
-        allowedTools: ['Read', 'Grep', 'Glob', 'Agent'],
+        systemPrompt: buildReviewPrompt(projectContext),
+        allowedTools: ['Read', 'Grep', 'Glob'],
         permissionMode: 'bypassPermissions',
         allowDangerouslySkipPermissions: true,
         maxTurns: options.maxTurns,
