@@ -337,8 +337,11 @@ export interface ToolCallItem {
 
 // ========== Review Issues ==========
 
-export type IssueSeverity = 'error' | 'warning' | 'info';
-export type IssueCategory = 'style' | 'logic' | 'robustness';
+export const ISSUE_SEVERITIES = ['error', 'warning', 'info'] as const;
+export const ISSUE_CATEGORIES = ['style', 'logic', 'robustness'] as const;
+
+export type IssueSeverity = (typeof ISSUE_SEVERITIES)[number];
+export type IssueCategory = (typeof ISSUE_CATEGORIES)[number];
 
 export interface ReviewIssueRecord {
   id: number;

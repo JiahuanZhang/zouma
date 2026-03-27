@@ -207,18 +207,14 @@ async function handleDelete(row: GitRepo) {
   let deleteLocal = false;
   if (row.local_path) {
     try {
-      await ElMessageBox.confirm(
-        `是否同时删除本地项目目录？\n${row.local_path}`,
-        '删除本地目录',
-        {
-          type: 'warning',
-          confirmButtonText: '删除本地并删除记录',
-          cancelButtonText: '仅删除记录',
-          distinguishCancelAndClose: true,
-          closeOnClickModal: false,
-          closeOnPressEscape: false,
-        }
-      );
+      await ElMessageBox.confirm(`是否同时删除本地项目目录？\n${row.local_path}`, '删除本地目录', {
+        type: 'warning',
+        confirmButtonText: '删除本地并删除记录',
+        cancelButtonText: '仅删除记录',
+        distinguishCancelAndClose: true,
+        closeOnClickModal: false,
+        closeOnPressEscape: false,
+      });
       deleteLocal = true;
     } catch (action) {
       if (action !== 'cancel') return;

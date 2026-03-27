@@ -1,9 +1,10 @@
 import { z } from 'zod';
+import { ISSUE_SEVERITIES, ISSUE_CATEGORIES } from '@zouma/common';
 
 // ── Zod Schemas ──
 
-export const IssueSeveritySchema = z.enum(['error', 'warning', 'info']);
-export const IssueCategorySchema = z.enum(['style', 'logic', 'robustness']);
+export const IssueSeveritySchema = z.enum(ISSUE_SEVERITIES);
+export const IssueCategorySchema = z.enum(ISSUE_CATEGORIES);
 export const ReviewModeSchema = z.enum(['full', 'incremental']);
 export const ReviewStrategySchema = z.enum(['simple', 'smart']);
 

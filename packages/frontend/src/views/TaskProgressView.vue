@@ -47,8 +47,12 @@ const AGENT_COLOR: Record<string, string> = {
 };
 
 const SMART_PHASES: ProgressPhase[] = [
-  'collect_files', 'analyze_deps', 'project_summary',
-  'quick_scan', 'deep_review', 'merge',
+  'collect_files',
+  'analyze_deps',
+  'project_summary',
+  'quick_scan',
+  'deep_review',
+  'merge',
 ];
 const SIMPLE_PHASES: ProgressPhase[] = ['collect_files', 'deep_review', 'merge'];
 
@@ -63,7 +67,7 @@ const STATUS_CFG: Record<string, { label: string; type: TagType }> = {
 // ── Computed ──
 
 const phaseOrder = computed(() =>
-  summary.value?.strategy === 'simple' ? SIMPLE_PHASES : SMART_PHASES,
+  summary.value?.strategy === 'simple' ? SIMPLE_PHASES : SMART_PHASES
 );
 
 const phaseSteps = computed(() => {
@@ -211,7 +215,7 @@ watch(
   (s) => {
     if (s === 'running') startPoll();
     else stopPoll();
-  },
+  }
 );
 </script>
 
@@ -224,14 +228,8 @@ watch(
         <h2>{{ taskInfo?.name ?? `任务 #${id}` }}</h2>
       </div>
       <div v-if="summary" class="header-right">
-        <span
-          v-if="summary.overallStatus === 'running'"
-          class="pulse-dot"
-        />
-        <el-tag
-          :type="STATUS_CFG[summary.overallStatus]?.type ?? 'info'"
-          size="large"
-        >
+        <span v-if="summary.overallStatus === 'running'" class="pulse-dot" />
+        <el-tag :type="STATUS_CFG[summary.overallStatus]?.type ?? 'info'" size="large">
           {{ STATUS_CFG[summary.overallStatus]?.label ?? summary.overallStatus }}
         </el-tag>
       </div>
@@ -352,7 +350,8 @@ watch(
                   v-if="step.data"
                   :type="STATUS_CFG[step.data.status]?.type ?? 'info'"
                   size="small"
-                >{{ STATUS_CFG[step.data.status]?.label ?? step.data.status }}</el-tag>
+                  >{{ STATUS_CFG[step.data.status]?.label ?? step.data.status }}</el-tag
+                >
                 <span v-if="step.data" class="phase-meta">
                   <template v-if="step.data.durationMs != null">
                     {{ formatDuration(step.data.durationMs) }}
@@ -376,7 +375,9 @@ watch(
                 class="batch-card"
               >
                 <div class="batch-header">
-                  <span class="batch-title">批次 {{ batch.batchIndex }} / {{ batch.batchTotal }}</span>
+                  <span class="batch-title"
+                    >批次 {{ batch.batchIndex }} / {{ batch.batchTotal }}</span
+                  >
                   <el-tag :type="STATUS_CFG[batch.status]?.type ?? 'info'" size="small">
                     {{ STATUS_CFG[batch.status]?.label ?? batch.status }}
                   </el-tag>
@@ -398,11 +399,7 @@ watch(
                 <!-- Agents -->
                 <div v-if="batch.agents.length > 0" class="agent-section">
                   <div class="agent-section-title">Agent 执行详情</div>
-                  <div
-                    v-for="agent in batch.agents"
-                    :key="agent.agentName"
-                    class="agent-row"
-                  >
+                  <div v-for="agent in batch.agents" :key="agent.agentName" class="agent-row">
                     <div class="agent-info">
                       <span
                         class="agent-dot"
@@ -415,7 +412,8 @@ watch(
                         :type="STATUS_CFG[agent.status]?.type ?? 'info'"
                         size="small"
                         class="agent-tag"
-                      >{{ STATUS_CFG[agent.status]?.label ?? agent.status }}</el-tag>
+                        >{{ STATUS_CFG[agent.status]?.label ?? agent.status }}</el-tag
+                      >
                       <span class="agent-meta">
                         {{ formatDuration(agent.durationMs) }}
                         &middot; {{ fmtTokens(agent.tokensUsed) }} tk
@@ -514,8 +512,15 @@ watch(
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.4; transform: scale(0.75); }
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.75);
+  }
 }
 
 /* ── Summary cards ── */
@@ -558,7 +563,9 @@ watch(
 
 .stat-card.clickable {
   cursor: pointer;
-  transition: box-shadow 0.2s, border-color 0.2s;
+  transition:
+    box-shadow 0.2s,
+    border-color 0.2s;
 }
 
 .stat-card.clickable:hover {

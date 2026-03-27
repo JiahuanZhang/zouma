@@ -358,7 +358,9 @@ function aggregateProgress(
     try {
       const parsed = JSON.parse(collectPhase.endRow.detail);
       if (Array.isArray(parsed.files)) fileList = parsed.files;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   const totalIssues = countIssuesFromTable(taskId);

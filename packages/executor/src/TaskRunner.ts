@@ -1,5 +1,5 @@
 import type { ReviewTask } from '@zouma/common';
-import { DatabaseManager } from '@zouma/common';
+import { DatabaseManager, ISSUE_SEVERITIES, ISSUE_CATEGORIES } from '@zouma/common';
 import { buildFromDB, preflightLlmCheck } from './configAdapter.js';
 import { createDbLogger } from './dbLogger.js';
 import { runReview } from './core/orchestrate.js';
@@ -90,11 +90,17 @@ export class TaskRunner {
 
   private saveIssues(taskId: number, reportJson: string): void {
     try {
-      const report = JSON.parse(reportJson) as { issues?: Array<{
-        severity: string; category: string; file: string;
-        line?: number; description: string; suggestion: string;
-      }> };
-      const validIssues = report.issues?.filter(i => i.file && i.description);
+      const report = JSON.parse(reportJson) as {
+        issues?: Array<{
+          severity: string;
+          category: string;
+          file: string;
+          line?: number;
+          description: string;
+          suggestion: string;
+        }>;
+      };
+      const validIssues = report.issues?.filter((i) => i.file && i.description);
       if (!validIssues?.length) return;
 
       const db = DatabaseManager.getDatabase();
@@ -104,8 +110,12 @@ export class TaskRunner {
       );
       const batch = db.transaction((issues: typeof validIssues) => {
         for (const i of issues!) {
-          const sev = (['error', 'warning', 'info'].includes(i.severity)) ? i.severity : 'info';
-          const cat = (['style', 'logic', 'robustness'].includes(i.category)) ? i.category : 'logic';
+          const sev = (ISSUE_SEVERITIES as readonly string[]).includes(i.severity)
+            ? i.severity
+            : 'info';
+          const cat = (ISSUE_CATEGORIES as readonly string[]).includes(i.category)
+            ? i.category
+            : 'logic';
           insert.run(taskId, sev, cat, i.file, i.line ?? null, i.description, i.suggestion ?? '');
         }
       });

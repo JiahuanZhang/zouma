@@ -144,7 +144,9 @@ onMounted(fetchData);
                 @click="handleCategoryFilter(key)"
               >
                 <span class="cat-dot" :style="{ background: cfg.color }" />
-                <span class="cat-count">{{ categoryStats[key as keyof typeof categoryStats] }}</span>
+                <span class="cat-count">{{
+                  categoryStats[key as keyof typeof categoryStats]
+                }}</span>
                 <span>{{ cfg.label }}</span>
               </div>
             </div>
@@ -164,12 +166,7 @@ onMounted(fetchData);
         >
           {{ SEVERITY_CFG[filterSeverity]?.label }}
         </el-tag>
-        <el-tag
-          v-if="filterCategory"
-          closable
-          size="small"
-          @close="filterCategory = ''"
-        >
+        <el-tag v-if="filterCategory" closable size="small" @close="filterCategory = ''">
           {{ CATEGORY_CFG[filterCategory]?.label }}
         </el-tag>
         <el-button text size="small" @click="clearFilters">清除所有</el-button>
@@ -181,11 +178,7 @@ onMounted(fetchData);
         <el-table :data="filteredIssues" stripe border row-key="id" default-expand-all>
           <el-table-column label="严重程度" width="100" align="center">
             <template #default="{ row }">
-              <el-tag
-                :type="SEVERITY_CFG[row.severity]?.type ?? 'info'"
-                size="small"
-                effect="dark"
-              >
+              <el-tag :type="SEVERITY_CFG[row.severity]?.type ?? 'info'" size="small" effect="dark">
                 {{ SEVERITY_CFG[row.severity]?.label ?? row.severity }}
               </el-tag>
             </template>
@@ -355,7 +348,7 @@ onMounted(fetchData);
 .file-path {
   font-family: 'Cascadia Code', 'Fira Code', monospace;
   font-size: 13px;
-  color: #409EFF;
+  color: #409eff;
 }
 
 .line-num {
@@ -407,6 +400,6 @@ onMounted(fetchData);
   background: #f0f9eb;
   padding: 8px 12px;
   border-radius: 4px;
-  border-left: 3px solid #67C23A;
+  border-left: 3px solid #67c23a;
 }
 </style>
