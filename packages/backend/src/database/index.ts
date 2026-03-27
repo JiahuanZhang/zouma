@@ -13,6 +13,8 @@ export function initializeDatabase(): void {
       branch TEXT DEFAULT 'main',
       access_token TEXT,
       local_path TEXT,
+      status TEXT NOT NULL DEFAULT 'ready',
+      status_message TEXT,
       description TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
@@ -23,6 +25,20 @@ export function initializeDatabase(): void {
   if (!gitRepoColumns.some((c) => c.name === 'local_path')) {
     db.exec(`ALTER TABLE git_repo ADD COLUMN local_path TEXT`);
   }
+  if (!gitRepoColumns.some((c) => c.name === 'status')) {
+    db.exec(`ALTER TABLE git_repo ADD COLUMN status TEXT DEFAULT 'ready'`);
+  }
+  if (!gitRepoColumns.some((c) => c.name === 'status_message')) {
+    db.exec(`ALTER TABLE git_repo ADD COLUMN status_message TEXT`);
+  }
+  db.exec(`
+    UPDATE git_repo
+    SET status = CASE
+      WHEN local_path IS NOT NULL AND TRIM(local_path) <> '' THEN 'ready'
+      ELSE 'error'
+    END
+    WHERE status IS NULL OR TRIM(status) = ''
+  `);
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS llm_config (

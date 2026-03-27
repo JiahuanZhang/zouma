@@ -16,6 +16,7 @@ import type {
   ReviewIssueRecord,
 } from '@zouma/common';
 import { DatabaseManager } from '../database/index.js';
+import { GitRepoService } from './GitRepoService.js';
 
 export class ReviewTaskService {
   static findAll(params?: PaginationParams): { items: ReviewTaskWithRelations[]; total: number } {
@@ -50,9 +51,7 @@ export class ReviewTaskService {
     snapshot?: { planId?: number; planName?: string }
   ): ReviewTask {
     const db = DatabaseManager.getDatabase();
-    const repoRow = db.prepare('SELECT name FROM git_repo WHERE id = ?').get(dto.repo_id) as
-      | { name: string }
-      | undefined;
+    const repo = GitRepoService.assertRepoReadyForReview(dto.repo_id);
     const llmRow = db.prepare('SELECT name FROM llm_config WHERE id = ?').get(dto.llm_config_id) as
       | { name: string }
       | undefined;
@@ -70,7 +69,7 @@ export class ReviewTaskService {
         dto.file_patterns ?? null,
         snapshot?.planId ?? null,
         snapshot?.planName ?? null,
-        repoRow?.name ?? null,
+        repo.name,
         llmRow?.name ?? null
       );
     return ReviewTaskService.findById(Number(result.lastInsertRowid))!;
@@ -121,6 +120,7 @@ export class ReviewTaskService {
       | ReviewTask
       | undefined;
     if (!existing) return undefined;
+    GitRepoService.assertRepoReadyForReview(existing.repo_id);
 
     db.prepare(
       `UPDATE review_task SET status = 'pending', result = NULL, updated_at = datetime('now') WHERE id = ?`
@@ -326,6 +326,14 @@ function buildBatches(
   return batches;
 }
 
+function countIssuesFromTable(taskId: number): number {
+  const db = DatabaseManager.getDatabase();
+  const row = db
+    .prepare('SELECT COUNT(*) as count FROM review_issues WHERE task_id = ?')
+    .get(taskId) as { count: number };
+  return row.count;
+}
+
 function aggregateProgress(
   taskId: number,
   task: ReviewTask,
@@ -353,6 +361,8 @@ function aggregateProgress(
     } catch { /* ignore */ }
   }
 
+  const totalIssues = countIssuesFromTable(taskId);
+
   return {
     taskId,
     strategy: taskStartRow?.strategy ?? null,
@@ -367,7 +377,7 @@ function aggregateProgress(
     startedAt: taskStartRow?.created_at ?? null,
     endedAt: taskEndRow?.created_at ?? null,
     totalDurationMs: taskEndRow?.duration_ms ?? null,
-    totalIssues: taskEndRow?.issue_count ?? batches.reduce((s, b) => s + b.issueCount, 0),
+    totalIssues,
     totalTokens: taskEndRow?.tokens_used ?? batches.reduce((s, b) => s + b.tokensUsed, 0),
     totalCostUsd: taskEndRow?.cost_usd ?? batches.reduce((s, b) => s + b.costUsd, 0),
     phases,

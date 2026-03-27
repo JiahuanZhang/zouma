@@ -66,12 +66,26 @@ export class GitRepoController {
       res.status(400).json(ResponseHelper.error('无效的 ID', 400));
       return;
     }
-    const deleted = GitRepoService.delete(id);
+    const { delete_local: deleteLocalRaw } = (req.body ?? {}) as { delete_local?: unknown };
+    if (deleteLocalRaw !== undefined && typeof deleteLocalRaw !== 'boolean') {
+      res.status(400).json(ResponseHelper.error('delete_local 必须为布尔值', 400));
+      return;
+    }
+    const deleteLocal = deleteLocalRaw === true;
+
+    let deleted = false;
+    try {
+      deleted = GitRepoService.delete(id, { deleteLocal });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '删除失败';
+      res.status(400).json(ResponseHelper.error(msg, 400));
+      return;
+    }
     if (!deleted) {
       res.status(404).json(ResponseHelper.error('未找到记录', 404));
       return;
     }
-    res.json(ResponseHelper.success(null, '删除成功'));
+    res.json(ResponseHelper.success(null, deleteLocal ? '删除成功（含本地目录）' : '删除成功'));
   }
 
   static detectLocal(req: Request, res: Response): void {

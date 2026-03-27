@@ -19,6 +19,7 @@ const editingId = ref<number | null>(null);
 const formRef = ref<FormInstance>();
 
 type RepoMode = 'remote' | 'local';
+type RepoStatus = 'downloading' | 'ready' | 'error';
 const repoMode = ref<RepoMode>('remote');
 const localPath = ref('');
 const detecting = ref(false);
@@ -39,6 +40,18 @@ const form = reactive<CreateGitRepoDTO>({
 });
 
 const isLocal = computed(() => repoMode.value === 'local');
+
+const repoStatusLabelMap: Record<RepoStatus, string> = {
+  downloading: '下载中',
+  ready: '正常',
+  error: '异常',
+};
+
+const repoStatusTagTypeMap: Record<RepoStatus, 'warning' | 'success' | 'danger'> = {
+  downloading: 'warning',
+  ready: 'success',
+  error: 'danger',
+};
 
 const rules = computed(() => ({
   name: [{ required: true, message: '请输入仓库名称', trigger: 'blur' }],
@@ -177,8 +190,13 @@ async function handleSubmit() {
     await gitRepoApi.update(editingId.value, dto);
     ElMessage.success('更新成功');
   } else {
-    await gitRepoApi.create(dto);
-    ElMessage.success('创建成功');
+    const created = await gitRepoApi.create(dto);
+    const status = normalizeRepoStatus(created.data);
+    if (status === 'downloading') {
+      ElMessage.success('创建成功，后台下载中');
+    } else {
+      ElMessage.success('创建成功');
+    }
   }
   dialogVisible.value = false;
   fetchData();
@@ -186,8 +204,28 @@ async function handleSubmit() {
 
 async function handleDelete(row: GitRepo) {
   await ElMessageBox.confirm(`确定删除仓库「${row.name}」？`, '确认删除', { type: 'warning' });
-  await gitRepoApi.remove(row.id);
-  ElMessage.success('删除成功');
+  let deleteLocal = false;
+  if (row.local_path) {
+    try {
+      await ElMessageBox.confirm(
+        `是否同时删除本地项目目录？\n${row.local_path}`,
+        '删除本地目录',
+        {
+          type: 'warning',
+          confirmButtonText: '删除本地并删除记录',
+          cancelButtonText: '仅删除记录',
+          distinguishCancelAndClose: true,
+          closeOnClickModal: false,
+          closeOnPressEscape: false,
+        }
+      );
+      deleteLocal = true;
+    } catch (action) {
+      if (action !== 'cancel') return;
+    }
+  }
+  await gitRepoApi.remove(row.id, deleteLocal);
+  ElMessage.success(deleteLocal ? '删除成功（含本地目录）' : '删除成功');
   fetchData();
 }
 
@@ -205,6 +243,21 @@ function handleSizeChange(val: number) {
 function handleDropdownCommand(cmd: string) {
   if (cmd === 'remote') handleAddRemote();
   else if (cmd === 'local') handleAddLocal();
+}
+
+function normalizeRepoStatus(repo: GitRepo): RepoStatus {
+  if (repo.status === 'downloading' || repo.status === 'ready' || repo.status === 'error') {
+    return repo.status;
+  }
+  return repo.local_path ? 'ready' : 'error';
+}
+
+function getRepoStatusLabel(repo: GitRepo): string {
+  return repoStatusLabelMap[normalizeRepoStatus(repo)];
+}
+
+function getRepoStatusTagType(repo: GitRepo): 'warning' | 'success' | 'danger' {
+  return repoStatusTagTypeMap[normalizeRepoStatus(repo)];
 }
 
 onMounted(fetchData);
@@ -236,6 +289,22 @@ onMounted(fetchData);
         <template #default="{ row }">
           <el-tag :type="row.local_path ? 'success' : 'primary'" size="small">
             {{ row.local_path ? '本地' : '远程' }}
+          </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="状态" width="100" align="center">
+        <template #default="{ row }">
+          <el-tooltip
+            v-if="normalizeRepoStatus(row) === 'error' && row.status_message"
+            :content="row.status_message"
+            placement="top"
+          >
+            <el-tag :type="getRepoStatusTagType(row)" size="small">
+              {{ getRepoStatusLabel(row) }}
+            </el-tag>
+          </el-tooltip>
+          <el-tag v-else :type="getRepoStatusTagType(row)" size="small">
+            {{ getRepoStatusLabel(row) }}
           </el-tag>
         </template>
       </el-table-column>
@@ -300,6 +369,7 @@ onMounted(fetchData);
         <el-form-item label="仓库地址" prop="url">
           <el-input
             v-model="form.url"
+            :disabled="!!editingId"
             :placeholder="
               isLocal ? '自动识别（无远程地址可留空）' : 'https://github.com/user/repo.git'
             "

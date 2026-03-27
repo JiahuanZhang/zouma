@@ -26,10 +26,14 @@ export interface GitRepo {
   branch: string;
   access_token: string | null;
   local_path: string | null;
+  status: GitRepoStatus;
+  status_message: string | null;
   description: string | null;
   created_at: string;
   updated_at: string;
 }
+
+export type GitRepoStatus = 'downloading' | 'ready' | 'error';
 
 export interface CreateGitRepoDTO {
   name: string;

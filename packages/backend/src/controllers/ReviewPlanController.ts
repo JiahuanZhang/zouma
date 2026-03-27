@@ -7,6 +7,7 @@ import type {
 } from '@zouma/common';
 import { ResponseHelper, Validator } from '@zouma/common';
 import { ReviewPlanService } from '../services/ReviewPlanService.js';
+import { RepoNotReadyError } from '../services/GitRepoService.js';
 
 const VALID_TRIGGER_TYPES: ReviewPlanTriggerType[] = ['interval', 'daily', 'webhook'];
 
@@ -133,7 +134,16 @@ export class ReviewPlanController {
       res.status(400).json(ResponseHelper.error('无效的 ID', 400));
       return;
     }
-    const result = ReviewPlanService.trigger(id);
+    let result: ReturnType<typeof ReviewPlanService.trigger>;
+    try {
+      result = ReviewPlanService.trigger(id);
+    } catch (err) {
+      if (err instanceof RepoNotReadyError) {
+        res.status(400).json(ResponseHelper.error(err.message, 400));
+        return;
+      }
+      throw err;
+    }
     if (!result) {
       res.status(404).json(ResponseHelper.error('未找到记录', 404));
       return;

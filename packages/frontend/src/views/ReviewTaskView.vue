@@ -25,8 +25,6 @@ const repos = ref<GitRepo[]>([]);
 const llmConfigs = ref<LlmConfig[]>([]);
 
 const dialogVisible = ref(false);
-const dialogTitle = ref('');
-const editingId = ref<number | null>(null);
 const formRef = ref<FormInstance>();
 
 const defaultForm = (): CreateReviewTaskDTO => ({
@@ -38,6 +36,7 @@ const defaultForm = (): CreateReviewTaskDTO => ({
 });
 
 const form = reactive<CreateReviewTaskDTO>(defaultForm());
+type RepoStatus = 'downloading' | 'ready' | 'error';
 
 const rules = {
   name: [{ required: true, message: '请输入任务名称', trigger: 'blur' }],
@@ -53,6 +52,27 @@ const statusMap: Record<string, { label: string; type: string }> = {
   completed: { label: '已完成', type: 'success' },
   failed: { label: '失败', type: 'danger' },
 };
+
+const repoStatusLabelMap: Record<RepoStatus, string> = {
+  downloading: '下载中',
+  ready: '正常',
+  error: '异常',
+};
+
+function normalizeRepoStatus(repo: GitRepo): RepoStatus {
+  if (repo.status === 'downloading' || repo.status === 'ready' || repo.status === 'error') {
+    return repo.status;
+  }
+  return repo.local_path ? 'ready' : 'error';
+}
+
+function isRepoReady(repo: GitRepo): boolean {
+  return normalizeRepoStatus(repo) === 'ready' && !!repo.local_path;
+}
+
+function getRepoOptionLabel(repo: GitRepo): string {
+  return `${repo.name} [${repoStatusLabelMap[normalizeRepoStatus(repo)]}]`;
+}
 
 async function fetchData() {
   loading.value = true;
@@ -72,28 +92,23 @@ async function fetchOptions() {
 }
 
 function handleAdd() {
-  editingId.value = null;
-  dialogTitle.value = '新增评审任务';
   Object.assign(form, defaultForm());
-  dialogVisible.value = true;
-}
-
-function handleEdit(row: ReviewTaskWithRelations) {
-  editingId.value = row.id;
-  dialogTitle.value = '编辑评审任务';
-  Object.assign(form, {
-    name: row.name,
-    repo_id: row.repo_id,
-    llm_config_id: row.llm_config_id,
-    target_branch: row.target_branch ?? '',
-    file_patterns: row.file_patterns ?? '',
-  });
   dialogVisible.value = true;
 }
 
 async function handleSubmit() {
   if (!formRef.value) return;
   await formRef.value.validate();
+  const selectedRepo = repos.value.find((r) => r.id === form.repo_id);
+  if (!selectedRepo) {
+    ElMessage.error('关联仓库不存在，请重新选择');
+    return;
+  }
+  if (!isRepoReady(selectedRepo)) {
+    const detail = selectedRepo.status_message ? `：${selectedRepo.status_message}` : '';
+    ElMessage.error(`仓库未就绪，无法开始评审${detail}`);
+    return;
+  }
 
   const dto: CreateReviewTaskDTO = {
     name: form.name,
@@ -103,13 +118,8 @@ async function handleSubmit() {
   if (form.target_branch) dto.target_branch = form.target_branch;
   if (form.file_patterns) dto.file_patterns = form.file_patterns;
 
-  if (editingId.value) {
-    await reviewTaskApi.update(editingId.value, dto);
-    ElMessage.success('更新成功');
-  } else {
-    await reviewTaskApi.create(dto);
-    ElMessage.success('创建成功');
-  }
+  await reviewTaskApi.create(dto);
+  ElMessage.success('创建成功');
   dialogVisible.value = false;
   fetchData();
 }
@@ -163,10 +173,9 @@ onMounted(() => {
         </template>
       </el-table-column>
       <el-table-column prop="created_at" label="创建时间" width="170" />
-      <el-table-column label="操作" width="210" fixed="right">
+      <el-table-column label="操作" width="160" fixed="right">
         <template #default="{ row }">
           <el-button size="small" @click="handleViewProgress(row)">进展</el-button>
-          <el-button size="small" @click="handleEdit(row)">编辑</el-button>
           <el-button size="small" type="danger" @click="handleDelete(row)">删除</el-button>
         </template>
       </el-table-column>
@@ -183,14 +192,20 @@ onMounted(() => {
       @size-change="handleSizeChange"
     />
 
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="550px" destroy-on-close>
+    <el-dialog v-model="dialogVisible" title="新增评审任务" width="550px" destroy-on-close>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="110px">
         <el-form-item label="任务名称" prop="name">
           <el-input v-model="form.name" placeholder="请输入任务名称" />
         </el-form-item>
         <el-form-item label="关联仓库" prop="repo_id">
           <el-select v-model="form.repo_id" placeholder="请选择仓库" style="width: 100%">
-            <el-option v-for="r in repos" :key="r.id" :label="r.name" :value="r.id" />
+            <el-option
+              v-for="r in repos"
+              :key="r.id"
+              :label="getRepoOptionLabel(r)"
+              :value="r.id"
+              :disabled="!isRepoReady(r)"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="LLM 配置" prop="llm_config_id">

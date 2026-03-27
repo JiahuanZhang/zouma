@@ -1,6 +1,7 @@
 import type { ReviewTask, GitRepo, LlmConfig } from '@zouma/common';
 import { DatabaseManager, testLlmConnection } from '@zouma/common';
 import path from 'node:path';
+import fs from 'node:fs';
 import type { AppConfig, ReviewOptions } from './core/reviewTypes.js';
 import { DEFAULT_OPTIONS } from './core/reviewTypes.js';
 
@@ -25,10 +26,23 @@ export function buildFromDB(task: ReviewTask): ResolvedConfig {
   if (!gitRepo) {
     throw new Error(`Git 仓库不存在 (id=${task.repo_id})`);
   }
+  if (gitRepo.status === 'downloading') {
+    throw new Error(`Git 仓库 "${gitRepo.name}" 正在下载中，请稍后重试`);
+  }
+  if (gitRepo.status === 'error') {
+    const detail = gitRepo.status_message ? `: ${gitRepo.status_message}` : '';
+    throw new Error(`Git 仓库 "${gitRepo.name}" 状态异常${detail}`);
+  }
 
   const targetPath = gitRepo.local_path ? path.resolve(gitRepo.local_path) : undefined;
   if (!targetPath) {
     throw new Error(`Git 仓库 "${gitRepo.name}" 未配置本地路径 (local_path)`);
+  }
+  if (!fs.existsSync(targetPath)) {
+    throw new Error(`Git 仓库 "${gitRepo.name}" 本地路径不存在: ${targetPath}`);
+  }
+  if (!fs.existsSync(path.join(targetPath, '.git'))) {
+    throw new Error(`Git 仓库 "${gitRepo.name}" 本地路径不是有效 Git 仓库: ${targetPath}`);
   }
 
   const appConfig: AppConfig = {

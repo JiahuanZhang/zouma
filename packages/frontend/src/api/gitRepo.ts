@@ -25,8 +25,8 @@ export const gitRepoApi = {
   update(id: number, dto: UpdateGitRepoDTO) {
     return http.put<GitRepo>(`${BASE}/${id}`, dto);
   },
-  remove(id: number) {
-    return http.delete(`${BASE}/${id}`);
+  remove(id: number, deleteLocal = false) {
+    return http.delete(`${BASE}/${id}`, { data: { delete_local: deleteLocal } });
   },
   detectLocal(path: string) {
     return http.post<DetectLocalRepoResult>(`${BASE}/detect-local`, { path });

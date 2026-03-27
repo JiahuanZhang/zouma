@@ -54,6 +54,7 @@ const defaultForm = (): PlanForm => ({
 });
 
 const form = reactive<PlanForm>(defaultForm());
+type RepoStatus = 'downloading' | 'ready' | 'error';
 
 const rules = {
   name: [{ required: true, message: '请输入计划名称', trigger: 'blur' }],
@@ -63,6 +64,27 @@ const rules = {
   ],
   trigger_type: [{ required: true, message: '请选择触发方式', trigger: 'change' }],
 };
+
+const repoStatusLabelMap: Record<RepoStatus, string> = {
+  downloading: '下载中',
+  ready: '正常',
+  error: '异常',
+};
+
+function normalizeRepoStatus(repo: GitRepo): RepoStatus {
+  if (repo.status === 'downloading' || repo.status === 'ready' || repo.status === 'error') {
+    return repo.status;
+  }
+  return repo.local_path ? 'ready' : 'error';
+}
+
+function isRepoReady(repo: GitRepo): boolean {
+  return normalizeRepoStatus(repo) === 'ready' && !!repo.local_path;
+}
+
+function getRepoOptionLabel(repo: GitRepo): string {
+  return `${repo.name} [${repoStatusLabelMap[normalizeRepoStatus(repo)]}]`;
+}
 
 function buildTriggerConfig(): CreateReviewPlanDTO['trigger_config'] {
   if (form.trigger_type === 'interval') {
@@ -136,6 +158,16 @@ function handleEdit(row: ReviewPlanWithRelations) {
 async function handleSubmit() {
   if (!formRef.value) return;
   await formRef.value.validate();
+  const selectedRepo = repos.value.find((r) => r.id === form.repo_id);
+  if (!selectedRepo) {
+    ElMessage.error('关联仓库不存在，请重新选择');
+    return;
+  }
+  if (!isRepoReady(selectedRepo)) {
+    const detail = selectedRepo.status_message ? `：${selectedRepo.status_message}` : '';
+    ElMessage.error(`仓库未就绪，无法保存评审计划${detail}`);
+    return;
+  }
 
   const dto: CreateReviewPlanDTO = {
     name: form.name,
@@ -167,6 +199,12 @@ async function handleDelete(row: ReviewPlanWithRelations) {
 }
 
 async function handleTrigger(row: ReviewPlanWithRelations) {
+  const selectedRepo = repos.value.find((r) => r.id === row.repo_id);
+  if (selectedRepo && !isRepoReady(selectedRepo)) {
+    const detail = selectedRepo.status_message ? `：${selectedRepo.status_message}` : '';
+    ElMessage.error(`仓库未就绪，无法触发计划${detail}`);
+    return;
+  }
   await ElMessageBox.confirm(`确定立即触发计划「${row.name}」？将新增一条评审任务。`, '确认触发', {
     type: 'info',
     confirmButtonText: '立即触发',
@@ -271,7 +309,13 @@ onMounted(() => {
         </el-form-item>
         <el-form-item label="关联仓库" prop="repo_id">
           <el-select v-model="form.repo_id" placeholder="请选择仓库" style="width: 100%">
-            <el-option v-for="r in repos" :key="r.id" :label="r.name" :value="r.id" />
+            <el-option
+              v-for="r in repos"
+              :key="r.id"
+              :label="getRepoOptionLabel(r)"
+              :value="r.id"
+              :disabled="!isRepoReady(r)"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="LLM 配置" prop="llm_config_id">
