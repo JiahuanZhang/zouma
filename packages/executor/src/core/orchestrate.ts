@@ -83,8 +83,6 @@ async function runReviewSimple(
 
   tracker?.phaseStart('deep_review');
   const phaseT0 = Date.now();
-  let totalTokens = 0;
-  let totalCost = 0;
 
   const limit = pLimit(concurrency);
   const tasks = batches.map((batch, idx) =>
@@ -116,9 +114,7 @@ async function runReviewSimple(
           tokensUsed: safe.tokensUsed,
           costUsd: safe.costUsd,
         });
-        totalTokens += safe.tokensUsed ?? 0;
-        totalCost += safe.costUsd ?? 0;
-        return safe.report;
+        return { report: safe.report, tokens: safe.tokensUsed ?? 0, cost: safe.costUsd ?? 0 };
       } catch (err) {
         tracker?.batchEnd('deep_review', batchIdx, {
           status: 'failed',
@@ -131,7 +127,27 @@ async function runReviewSimple(
   );
 
   const settled = await Promise.allSettled(tasks);
-  const reports = collectSettled(settled, '批次', logger);
+  const batchResults: { report: ReviewReport; tokens: number; cost: number }[] = [];
+  for (const [i, r] of settled.entries()) {
+    if (r.status === 'fulfilled') {
+      batchResults.push(r.value);
+    } else {
+      const msg = r.reason instanceof Error ? r.reason.message : String(r.reason);
+      logger.error(`[批次 ${i + 1}] 异常: ${msg}`);
+      batchResults.push({
+        report: {
+          summary: '评审未返回有效结果',
+          issues: [],
+          score: { style: 0, logic: 0, robustness: 0, overall: 0 },
+        },
+        tokens: 0,
+        cost: 0,
+      });
+    }
+  }
+  const reports = batchResults.map((b) => b.report);
+  const totalTokens = batchResults.reduce((sum, b) => sum + b.tokens, 0);
+  const totalCost = batchResults.reduce((sum, b) => sum + b.cost, 0);
   const merged = mergeReports(reports);
 
   tracker?.phaseEnd('deep_review', {
@@ -165,8 +181,6 @@ async function runReviewSmart(
   tracker?: ProgressTracker
 ): Promise<RunResult> {
   const { mode, targetPath, concurrency, maxGroupSize } = options;
-  let totalTokens = 0;
-  let totalCost = 0;
 
   logger.info(`发现 ${files.length} 个待评审文件，模式: ${mode}，策略: smart`);
 
@@ -237,9 +251,7 @@ async function runReviewSmart(
           tokensUsed: safe.tokensUsed,
           costUsd: safe.costUsd,
         });
-        totalTokens += safe.tokensUsed ?? 0;
-        totalCost += safe.costUsd ?? 0;
-        return safe.report;
+        return { report: safe.report, tokens: safe.tokensUsed ?? 0, cost: safe.costUsd ?? 0 };
       } catch (err) {
         tracker?.batchEnd('quick_scan', batchIdx, {
           status: 'failed',
@@ -250,8 +262,9 @@ async function runReviewSmart(
       }
     })
   );
-  const quickReports = await Promise.allSettled(quickTasks);
-  const settledQuickReports = collectSettled(quickReports, '快扫', logger);
+  const quickSettled = await Promise.allSettled(quickTasks);
+  const quickResults = collectSettledWithCost(quickSettled, '快扫', logger);
+  const settledQuickReports = quickResults.map((b) => b.report);
   const quickIssues = settledQuickReports.flatMap((r) => r.issues);
   logger.info(`快速扫描完成: ${quickIssues.length} 个严重问题`);
   tracker?.phaseEnd('quick_scan', {
@@ -295,9 +308,7 @@ async function runReviewSmart(
           tokensUsed: safe.tokensUsed,
           costUsd: safe.costUsd,
         });
-        totalTokens += safe.tokensUsed ?? 0;
-        totalCost += safe.costUsd ?? 0;
-        return safe.report;
+        return { report: safe.report, tokens: safe.tokensUsed ?? 0, cost: safe.costUsd ?? 0 };
       } catch (err) {
         tracker?.batchEnd('deep_review', batchIdx, {
           status: 'failed',
@@ -308,8 +319,9 @@ async function runReviewSmart(
       }
     })
   );
-  const deepReports = await Promise.allSettled(deepTasks);
-  const settledDeepReports = collectSettled(deepReports, '深审', logger);
+  const deepSettled = await Promise.allSettled(deepTasks);
+  const deepResults = collectSettledWithCost(deepSettled, '深审', logger);
+  const settledDeepReports = deepResults.map((b) => b.report);
 
   tracker?.phaseEnd('deep_review', {
     durationMs: Date.now() - deepPhaseT0,
@@ -323,6 +335,10 @@ async function runReviewSmart(
   tracker?.phaseEnd('merge', { durationMs: Date.now() - mergeT0 });
 
   saveIfGit(options, files, logger);
+
+  const allResults = [...quickResults, ...deepResults];
+  const totalTokens = allResults.reduce((sum, b) => sum + b.tokens, 0);
+  const totalCost = allResults.reduce((sum, b) => sum + b.cost, 0);
 
   return {
     report: merged,
@@ -350,27 +366,33 @@ function ensureBatchResult(r: BatchResult): BatchResult {
   };
 }
 
-function collectSettled(
-  results: PromiseSettledResult<ReviewReport>[],
+type BatchWithCost = { report: ReviewReport; tokens: number; cost: number };
+
+function collectSettledWithCost(
+  results: PromiseSettledResult<BatchWithCost>[],
   label: string,
   logger: ReviewLogger
-): ReviewReport[] {
-  const emptyReport: ReviewReport = {
-    summary: '评审未返回有效结果',
-    issues: [],
-    score: { style: 0, logic: 0, robustness: 0, overall: 0 },
+): BatchWithCost[] {
+  const empty: BatchWithCost = {
+    report: {
+      summary: '评审未返回有效结果',
+      issues: [],
+      score: { style: 0, logic: 0, robustness: 0, overall: 0 },
+    },
+    tokens: 0,
+    cost: 0,
   };
-  const reports: ReviewReport[] = [];
+  const out: BatchWithCost[] = [];
   for (const [i, r] of results.entries()) {
     if (r.status === 'fulfilled') {
-      reports.push(r.value);
+      out.push(r.value);
     } else {
       const msg = r.reason instanceof Error ? r.reason.message : String(r.reason);
       logger.error(`[${label} ${i + 1}] 异常: ${msg}`);
-      reports.push(emptyReport);
+      out.push(empty);
     }
   }
-  return reports;
+  return out;
 }
 
 function enrichContext(baseContext: string, quickIssues: ReviewIssue[]): string {

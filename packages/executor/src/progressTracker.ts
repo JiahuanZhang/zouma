@@ -6,6 +6,7 @@ export class ProgressTracker {
   private insertStmt;
   private currentAgentName: string | null = null;
   private agentStartTime: number | null = null;
+  private currentAgentTokens: number = 0;
   private currentPhase: ProgressPhase | null = null;
   private currentBatchIndex: number | null = null;
 
@@ -144,6 +145,7 @@ export class ProgressTracker {
     this.closeActiveAgent();
     this.currentAgentName = agentName;
     this.agentStartTime = Date.now();
+    this.currentAgentTokens = 0;
     this.insert({
       stepType: 'agent_start',
       phase: this.currentPhase ?? undefined,
@@ -153,8 +155,14 @@ export class ProgressTracker {
     });
   }
 
+  agentAddTokens(tokens: number): void {
+    this.currentAgentTokens += tokens;
+  }
+
   agentEnd(agentName: string, opts?: { tokensUsed?: number }): void {
     const durationMs = this.agentStartTime ? Date.now() - this.agentStartTime : undefined;
+    const tokensUsed =
+      opts?.tokensUsed ?? (this.currentAgentTokens > 0 ? this.currentAgentTokens : undefined);
     this.insert({
       stepType: 'agent_end',
       phase: this.currentPhase ?? undefined,
@@ -162,10 +170,11 @@ export class ProgressTracker {
       agentName,
       status: 'completed',
       durationMs,
-      tokensUsed: opts?.tokensUsed,
+      tokensUsed,
     });
     this.currentAgentName = null;
     this.agentStartTime = null;
+    this.currentAgentTokens = 0;
   }
 
   // ── Tool call level ──
@@ -199,6 +208,9 @@ export class ProgressTracker {
         break;
       }
       case 'assistant': {
+        if (message.usage?.total_tokens) {
+          this.agentAddTokens(message.usage.total_tokens);
+        }
         const blocks = message.message?.content ?? [];
         for (const block of blocks) {
           if (block.type === 'tool_use' && block.name) {

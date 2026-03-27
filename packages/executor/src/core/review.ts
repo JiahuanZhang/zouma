@@ -407,11 +407,13 @@ function validateReport(raw: unknown, label: string, logger: ReviewLogger): Revi
 }
 
 function parseReportFallback(text: string): ReviewReport {
-  try {
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) return JSON.parse(jsonMatch[0]) as ReviewReport;
-  } catch {
-    // ignore parse errors
+  const json = extractFirstJsonObject(text);
+  if (json) {
+    try {
+      return JSON.parse(json) as ReviewReport;
+    } catch {
+      // fall through
+    }
   }
 
   return {
@@ -419,4 +421,35 @@ function parseReportFallback(text: string): ReviewReport {
     issues: [],
     score: { style: 0, logic: 0, robustness: 0, overall: 0 },
   };
+}
+
+function extractFirstJsonObject(text: string): string | null {
+  const start = text.indexOf('{');
+  if (start === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (ch === '\\' && inString) {
+      escape = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return null;
 }
