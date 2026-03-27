@@ -57,6 +57,41 @@ export function initializeDatabase(): void {
   `);
 
   db.exec(`
+    CREATE TABLE IF NOT EXISTS file_filter (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      include_extensions TEXT NOT NULL,
+      exclude_patterns TEXT,
+      description TEXT,
+      is_builtin INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  const existingFilters = db.prepare('SELECT COUNT(*) as count FROM file_filter').get() as {
+    count: number;
+  };
+  if (existingFilters.count === 0) {
+    db.prepare(
+      `INSERT INTO file_filter (name, include_extensions, exclude_patterns, description, is_builtin) VALUES (?, ?, ?, ?, 1)`
+    ).run(
+      'Unity 项目',
+      '.cs,.ts,.lua,.cpp,.c,.h,.hpp,.shader,.cginc,.hlsl',
+      '**/Library/**,**/Temp/**,**/Logs/**,**/obj/**',
+      '适用于 Unity 游戏项目，包含 C#、TypeScript、Lua、C++ 及 Shader 脚本'
+    );
+    db.prepare(
+      `INSERT INTO file_filter (name, include_extensions, exclude_patterns, description, is_builtin) VALUES (?, ?, ?, ?, 1)`
+    ).run(
+      'Node.js 项目',
+      '.ts,.tsx,.js,.jsx,.mjs,.cjs,.vue,.svelte',
+      '**/node_modules/**,**/dist/**,**/build/**,**/.next/**',
+      '适用于 Node.js / 前端项目，包含 TypeScript、JavaScript 及框架模板文件'
+    );
+  }
+
+  db.exec(`
     CREATE TABLE IF NOT EXISTS review_plan (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -86,6 +121,9 @@ export function initializeDatabase(): void {
   }
   if (!planColumns.some((c) => c.name === 'enabled')) {
     db.exec(`ALTER TABLE review_plan ADD COLUMN enabled INTEGER DEFAULT 1`);
+  }
+  if (!planColumns.some((c) => c.name === 'file_filter_id')) {
+    db.exec(`ALTER TABLE review_plan ADD COLUMN file_filter_id INTEGER`);
   }
 
   // 迁移：旧的 interval_hours/daily_time 列 → trigger_config JSON
@@ -148,6 +186,9 @@ export function initializeDatabase(): void {
     db.exec(
       `UPDATE review_task SET llm_config_name = (SELECT name FROM llm_config WHERE llm_config.id = review_task.llm_config_id)`
     );
+  }
+  if (!reviewTaskColumns.some((c) => c.name === 'file_filter_id')) {
+    db.exec(`ALTER TABLE review_task ADD COLUMN file_filter_id INTEGER`);
   }
 
   db.exec(`

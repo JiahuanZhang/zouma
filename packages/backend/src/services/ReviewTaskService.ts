@@ -58,8 +58,8 @@ export class ReviewTaskService {
 
     const result = db
       .prepare(
-        `INSERT INTO review_task (name, repo_id, llm_config_id, target_branch, file_patterns, plan_id, plan_name, repo_name, llm_config_name)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO review_task (name, repo_id, llm_config_id, target_branch, file_patterns, file_filter_id, plan_id, plan_name, repo_name, llm_config_name)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         dto.name,
@@ -67,6 +67,7 @@ export class ReviewTaskService {
         dto.llm_config_id,
         dto.target_branch ?? null,
         dto.file_patterns ?? null,
+        dto.file_filter_id ?? null,
         snapshot?.planId ?? null,
         snapshot?.planName ?? null,
         repo.name,

@@ -1,4 +1,4 @@
-import type { ReviewTask, GitRepo, LlmConfig } from '@zouma/common';
+import type { ReviewTask, GitRepo, LlmConfig, FileFilter } from '@zouma/common';
 import { DatabaseManager, testLlmConnection } from '@zouma/common';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -51,13 +51,36 @@ export function buildFromDB(task: ReviewTask): ResolvedConfig {
     model: llmConfig.model,
   };
 
-  const includeExtensions =
-    parseFilePatterns(task.file_patterns) ?? DEFAULT_OPTIONS.includeExtensions;
+  let includeExtensions = DEFAULT_OPTIONS.includeExtensions;
+  let excludePatterns = DEFAULT_OPTIONS.excludePatterns;
+
+  if (task.file_filter_id) {
+    const fileFilter = db
+      .prepare('SELECT * FROM file_filter WHERE id = ?')
+      .get(task.file_filter_id) as FileFilter | undefined;
+    if (fileFilter) {
+      const parsed = parseFilePatterns(fileFilter.include_extensions);
+      if (parsed) includeExtensions = parsed;
+      if (fileFilter.exclude_patterns) {
+        const extra = fileFilter.exclude_patterns
+          .split(',')
+          .map((p) => p.trim())
+          .filter(Boolean);
+        if (extra.length > 0) {
+          excludePatterns = [...DEFAULT_OPTIONS.excludePatterns, ...extra];
+        }
+      }
+    }
+  } else {
+    const fromTask = parseFilePatterns(task.file_patterns);
+    if (fromTask) includeExtensions = fromTask;
+  }
 
   const reviewOptions: ReviewOptions = {
     ...DEFAULT_OPTIONS,
     targetPath,
     includeExtensions,
+    excludePatterns,
   };
 
   return { appConfig, reviewOptions };

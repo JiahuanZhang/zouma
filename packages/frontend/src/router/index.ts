@@ -22,6 +22,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/LlmConfigView.vue'),
       },
       {
+        path: 'file-filters',
+        name: 'FileFilters',
+        component: () => import('@/views/FileFilterView.vue'),
+      },
+      {
         path: 'review-plans',
         name: 'ReviewPlans',
         component: () => import('@/views/ReviewPlanView.vue'),

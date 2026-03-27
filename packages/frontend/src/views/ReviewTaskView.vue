@@ -8,10 +8,12 @@ import type {
   CreateReviewTaskDTO,
   GitRepo,
   LlmConfig,
+  FileFilter,
 } from '@zouma/common';
 import { reviewTaskApi } from '@/api/reviewTask';
 import { gitRepoApi } from '@/api/gitRepo';
 import { llmConfigApi } from '@/api/llmConfig';
+import { fileFilterApi } from '@/api/fileFilter';
 
 const router = useRouter();
 
@@ -23,19 +25,28 @@ const pageSize = ref(10);
 
 const repos = ref<GitRepo[]>([]);
 const llmConfigs = ref<LlmConfig[]>([]);
+const fileFilters = ref<FileFilter[]>([]);
 
 const dialogVisible = ref(false);
 const formRef = ref<FormInstance>();
 
-const defaultForm = (): CreateReviewTaskDTO => ({
+interface TaskForm {
+  name: string;
+  repo_id: number;
+  llm_config_id: number;
+  target_branch: string;
+  file_filter_id: number | null;
+}
+
+const defaultForm = (): TaskForm => ({
   name: '',
   repo_id: 0,
   llm_config_id: 0,
   target_branch: '',
-  file_patterns: '',
+  file_filter_id: null,
 });
 
-const form = reactive<CreateReviewTaskDTO>(defaultForm());
+const form = reactive<TaskForm>(defaultForm());
 type RepoStatus = 'downloading' | 'ready' | 'error';
 
 const rules = {
@@ -86,9 +97,14 @@ async function fetchData() {
 }
 
 async function fetchOptions() {
-  const [repoRes, configRes] = await Promise.all([gitRepoApi.getAll(), llmConfigApi.getAll()]);
+  const [repoRes, configRes, filterRes] = await Promise.all([
+    gitRepoApi.getAll(),
+    llmConfigApi.getAll(),
+    fileFilterApi.getAll(),
+  ]);
   repos.value = repoRes.data;
   llmConfigs.value = configRes.data;
+  fileFilters.value = filterRes.data;
 }
 
 function handleAdd() {
@@ -116,7 +132,7 @@ async function handleSubmit() {
     llm_config_id: form.llm_config_id,
   };
   if (form.target_branch) dto.target_branch = form.target_branch;
-  if (form.file_patterns) dto.file_patterns = form.file_patterns;
+  if (form.file_filter_id) dto.file_filter_id = form.file_filter_id;
 
   await reviewTaskApi.create(dto);
   ElMessage.success('创建成功');
@@ -221,8 +237,15 @@ onMounted(() => {
         <el-form-item label="目标分支">
           <el-input v-model="form.target_branch" placeholder="可选，留空使用仓库默认分支" />
         </el-form-item>
-        <el-form-item label="文件过滤">
-          <el-input v-model="form.file_patterns" placeholder="可选，如: *.ts,*.vue" />
+        <el-form-item label="文件筛选">
+          <el-select
+            v-model="form.file_filter_id"
+            placeholder="可选，留空使用默认规则"
+            clearable
+            style="width: 100%"
+          >
+            <el-option v-for="f in fileFilters" :key="f.id" :label="f.name" :value="f.id" />
+          </el-select>
         </el-form-item>
       </el-form>
       <template #footer>

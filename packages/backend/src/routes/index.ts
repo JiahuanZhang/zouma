@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { gitRepoRouter } from './gitRepoRoutes.js';
 import { llmConfigRouter } from './llmConfigRoutes.js';
+import { fileFilterRouter } from './fileFilterRoutes.js';
 import { reviewPlanRouter } from './reviewPlanRoutes.js';
 import { reviewTaskRouter } from './reviewTaskRoutes.js';
 import { systemRouter } from './systemRoutes.js';
@@ -9,6 +10,7 @@ export const apiRouter = Router();
 
 apiRouter.use('/git-repos', gitRepoRouter);
 apiRouter.use('/llm-configs', llmConfigRouter);
+apiRouter.use('/file-filters', fileFilterRouter);
 apiRouter.use('/review-plans', reviewPlanRouter);
 apiRouter.use('/review-tasks', reviewTaskRouter);
 apiRouter.use('/system', systemRouter);

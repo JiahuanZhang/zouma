@@ -115,6 +115,33 @@ export interface LlmTestResult {
   latencyMs: number;
 }
 
+// ========== File Filter ==========
+
+export interface FileFilter {
+  id: number;
+  name: string;
+  include_extensions: string;
+  exclude_patterns: string | null;
+  description: string | null;
+  is_builtin: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateFileFilterDTO {
+  name: string;
+  include_extensions: string;
+  exclude_patterns?: string;
+  description?: string;
+}
+
+export interface UpdateFileFilterDTO {
+  name?: string;
+  include_extensions?: string;
+  exclude_patterns?: string;
+  description?: string;
+}
+
 // ========== Review Plan ==========
 
 export type ReviewPlanTriggerType = 'interval' | 'daily' | 'webhook';
@@ -140,6 +167,7 @@ export interface ReviewPlan {
   llm_config_id: number;
   target_branch: string | null;
   file_patterns: string | null;
+  file_filter_id: number | null;
   trigger_type: ReviewPlanTriggerType;
   trigger_config: TriggerConfig;
   enabled: number;
@@ -151,6 +179,7 @@ export interface ReviewPlan {
 export interface ReviewPlanWithRelations extends ReviewPlan {
   repo_name: string;
   llm_config_name: string;
+  file_filter_name: string | null;
 }
 
 export interface CreateReviewPlanDTO {
@@ -159,6 +188,7 @@ export interface CreateReviewPlanDTO {
   llm_config_id: number;
   target_branch?: string;
   file_patterns?: string;
+  file_filter_id?: number;
   trigger_type: ReviewPlanTriggerType;
   trigger_config: TriggerConfig;
   enabled?: number;
@@ -170,6 +200,7 @@ export interface UpdateReviewPlanDTO {
   llm_config_id?: number;
   target_branch?: string;
   file_patterns?: string;
+  file_filter_id?: number | null;
   trigger_type?: ReviewPlanTriggerType;
   trigger_config?: TriggerConfig;
   enabled?: number;
@@ -186,6 +217,7 @@ export interface ReviewTask {
   llm_config_id: number;
   target_branch: string | null;
   file_patterns: string | null;
+  file_filter_id: number | null;
   plan_id: number | null;
   plan_name: string | null;
   repo_name: string | null;
@@ -204,6 +236,7 @@ export interface CreateReviewTaskDTO {
   llm_config_id: number;
   target_branch?: string;
   file_patterns?: string;
+  file_filter_id?: number;
 }
 
 export interface UpdateReviewTaskDTO {
@@ -212,6 +245,7 @@ export interface UpdateReviewTaskDTO {
   llm_config_id?: number;
   target_branch?: string;
   file_patterns?: string;
+  file_filter_id?: number | null;
   status?: ReviewTaskStatus;
   result?: string;
 }

@@ -7,6 +7,7 @@ import type {
   CreateReviewPlanDTO,
   GitRepo,
   LlmConfig,
+  FileFilter,
   ReviewPlanTriggerType,
   IntervalTriggerConfig,
   DailyTriggerConfig,
@@ -14,6 +15,7 @@ import type {
 import { reviewPlanApi } from '@/api/reviewPlan';
 import { gitRepoApi } from '@/api/gitRepo';
 import { llmConfigApi } from '@/api/llmConfig';
+import { fileFilterApi } from '@/api/fileFilter';
 
 const loading = ref(false);
 const tableData = ref<ReviewPlanWithRelations[]>([]);
@@ -23,6 +25,7 @@ const pageSize = ref(10);
 
 const repos = ref<GitRepo[]>([]);
 const llmConfigs = ref<LlmConfig[]>([]);
+const fileFilters = ref<FileFilter[]>([]);
 
 const dialogVisible = ref(false);
 const dialogTitle = ref('');
@@ -34,7 +37,7 @@ interface PlanForm {
   repo_id: number;
   llm_config_id: number;
   target_branch: string;
-  file_patterns: string;
+  file_filter_id: number | null;
   trigger_type: ReviewPlanTriggerType;
   interval_hours: number;
   daily_time: string;
@@ -46,7 +49,7 @@ const defaultForm = (): PlanForm => ({
   repo_id: 0,
   llm_config_id: 0,
   target_branch: '',
-  file_patterns: '',
+  file_filter_id: null,
   trigger_type: 'interval',
   interval_hours: 24,
   daily_time: '09:00',
@@ -125,9 +128,14 @@ async function fetchData() {
 }
 
 async function fetchOptions() {
-  const [repoRes, configRes] = await Promise.all([gitRepoApi.getAll(), llmConfigApi.getAll()]);
+  const [repoRes, configRes, filterRes] = await Promise.all([
+    gitRepoApi.getAll(),
+    llmConfigApi.getAll(),
+    fileFilterApi.getAll(),
+  ]);
   repos.value = repoRes.data;
   llmConfigs.value = configRes.data;
+  fileFilters.value = filterRes.data;
 }
 
 function handleAdd() {
@@ -146,7 +154,7 @@ function handleEdit(row: ReviewPlanWithRelations) {
     repo_id: row.repo_id,
     llm_config_id: row.llm_config_id,
     target_branch: row.target_branch ?? '',
-    file_patterns: row.file_patterns ?? '',
+    file_filter_id: row.file_filter_id ?? null,
     trigger_type: row.trigger_type,
     interval_hours,
     daily_time,
@@ -178,7 +186,7 @@ async function handleSubmit() {
     enabled: form.enabled,
   };
   if (form.target_branch) dto.target_branch = form.target_branch;
-  if (form.file_patterns) dto.file_patterns = form.file_patterns;
+  if (form.file_filter_id) dto.file_filter_id = form.file_filter_id;
 
   if (editingId.value) {
     await reviewPlanApi.update(editingId.value, dto);
@@ -266,6 +274,7 @@ onMounted(() => {
       <el-table-column prop="repo_name" label="关联仓库" min-width="120" />
       <el-table-column prop="llm_config_name" label="LLM 配置" min-width="120" />
       <el-table-column prop="target_branch" label="目标分支" width="100" />
+      <el-table-column prop="file_filter_name" label="筛选模式" width="120" />
       <el-table-column label="触发时机" width="130">
         <template #default="{ row }">
           {{ formatTrigger(row) }}
@@ -331,8 +340,15 @@ onMounted(() => {
         <el-form-item label="目标分支">
           <el-input v-model="form.target_branch" placeholder="可选，留空使用仓库默认分支" />
         </el-form-item>
-        <el-form-item label="文件过滤">
-          <el-input v-model="form.file_patterns" placeholder="可选，如: *.ts,*.vue" />
+        <el-form-item label="文件筛选">
+          <el-select
+            v-model="form.file_filter_id"
+            placeholder="可选，留空使用默认规则"
+            clearable
+            style="width: 100%"
+          >
+            <el-option v-for="f in fileFilters" :key="f.id" :label="f.name" :value="f.id" />
+          </el-select>
         </el-form-item>
         <el-form-item label="触发方式" prop="trigger_type">
           <el-radio-group v-model="form.trigger_type">

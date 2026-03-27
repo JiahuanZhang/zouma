@@ -13,10 +13,12 @@ const SELECT_WITH_RELATIONS = `
   SELECT
     p.*,
     r.name as repo_name,
-    l.name as llm_config_name
+    l.name as llm_config_name,
+    ff.name as file_filter_name
   FROM review_plan p
   LEFT JOIN git_repo r ON p.repo_id = r.id
   LEFT JOIN llm_config l ON p.llm_config_id = l.id
+  LEFT JOIN file_filter ff ON p.file_filter_id = ff.id
 `;
 
 function parseRow<T extends { trigger_config: TriggerConfig | string }>(row: T): T {
@@ -71,8 +73,8 @@ export class ReviewPlanService {
     const db = DatabaseManager.getDatabase();
     const result = db
       .prepare(
-        `INSERT INTO review_plan (name, repo_id, llm_config_id, target_branch, file_patterns, trigger_type, trigger_config, enabled)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO review_plan (name, repo_id, llm_config_id, target_branch, file_patterns, file_filter_id, trigger_type, trigger_config, enabled)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         dto.name,
@@ -80,6 +82,7 @@ export class ReviewPlanService {
         dto.llm_config_id,
         dto.target_branch ?? null,
         dto.file_patterns ?? null,
+        dto.file_filter_id ?? null,
         dto.trigger_type,
         JSON.stringify(dto.trigger_config),
         dto.enabled ?? 1
@@ -134,6 +137,7 @@ export class ReviewPlanService {
         llm_config_id: plan.llm_config_id,
         target_branch: plan.target_branch ?? undefined,
         file_patterns: plan.file_patterns ?? undefined,
+        file_filter_id: plan.file_filter_id ?? undefined,
       },
       { planId: plan.id, planName: plan.name }
     );
