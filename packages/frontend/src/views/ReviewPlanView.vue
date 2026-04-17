@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, onMounted, computed } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance } from 'element-plus';
 import type {
@@ -11,6 +11,7 @@ import type {
   ReviewPlanTriggerType,
   IntervalTriggerConfig,
   DailyTriggerConfig,
+  WebhookTriggerConfig,
 } from '@zouma/common';
 import { reviewPlanApi } from '@/api/reviewPlan';
 import { gitRepoApi } from '@/api/gitRepo';
@@ -41,7 +42,17 @@ interface PlanForm {
   trigger_type: ReviewPlanTriggerType;
   interval_hours: number;
   daily_time: string;
+  webhook_secret: string;
   enabled: number;
+}
+
+function generateRandomString(length: number = 32) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
 }
 
 const defaultForm = (): PlanForm => ({
@@ -53,6 +64,7 @@ const defaultForm = (): PlanForm => ({
   trigger_type: 'interval',
   interval_hours: 24,
   daily_time: '09:00',
+  webhook_secret: generateRandomString(),
   enabled: 1,
 });
 
@@ -89,6 +101,11 @@ function getRepoOptionLabel(repo: GitRepo): string {
   return `${repo.name} [${repoStatusLabelMap[normalizeRepoStatus(repo)]}]`;
 }
 
+const webhookBaseUrl = computed(() => {
+  const base = window.location.origin;
+  return `${base}/api/review-plans/webhook`;
+});
+
 function buildTriggerConfig(): CreateReviewPlanDTO['trigger_config'] {
   if (form.trigger_type === 'interval') {
     return { interval_hours: form.interval_hours };
@@ -96,24 +113,36 @@ function buildTriggerConfig(): CreateReviewPlanDTO['trigger_config'] {
   if (form.trigger_type === 'daily') {
     return { time: form.daily_time };
   }
+  if (form.trigger_type === 'webhook') {
+    return form.webhook_secret ? { secret: form.webhook_secret } : {};
+  }
   return {};
 }
 
 function extractTriggerConfig(row: ReviewPlanWithRelations): {
   interval_hours: number;
   daily_time: string;
+  webhook_secret: string;
 } {
   const config = row.trigger_config;
   if (row.trigger_type === 'interval') {
     return {
       interval_hours: (config as IntervalTriggerConfig).interval_hours ?? 24,
       daily_time: '09:00',
+      webhook_secret: '',
     };
   }
   if (row.trigger_type === 'daily') {
-    return { interval_hours: 24, daily_time: (config as DailyTriggerConfig).time ?? '09:00' };
+    return { interval_hours: 24, daily_time: (config as DailyTriggerConfig).time ?? '09:00', webhook_secret: '' };
   }
-  return { interval_hours: 24, daily_time: '09:00' };
+  if (row.trigger_type === 'webhook') {
+    return {
+      interval_hours: 24,
+      daily_time: '09:00',
+      webhook_secret: (config as WebhookTriggerConfig).secret ?? '',
+    };
+  }
+  return { interval_hours: 24, daily_time: '09:00', webhook_secret: '' };
 }
 
 async function fetchData() {
@@ -148,7 +177,7 @@ function handleAdd() {
 function handleEdit(row: ReviewPlanWithRelations) {
   editingId.value = row.id;
   dialogTitle.value = '编辑评审计划';
-  const { interval_hours, daily_time } = extractTriggerConfig(row);
+  const { interval_hours, daily_time, webhook_secret } = extractTriggerConfig(row);
   Object.assign(form, {
     name: row.name,
     repo_id: row.repo_id,
@@ -158,6 +187,7 @@ function handleEdit(row: ReviewPlanWithRelations) {
     trigger_type: row.trigger_type,
     interval_hours,
     daily_time,
+    webhook_secret: webhook_secret || generateRandomString(),
     enabled: row.enabled,
   });
   dialogVisible.value = true;
@@ -239,6 +269,19 @@ function handleSizeChange(val: number) {
   pageSize.value = val;
   page.value = 1;
   fetchData();
+  }
+
+function copyWebhookUrl() {
+  const url = `${webhookBaseUrl.value}/${editingId.value}`;
+  navigator.clipboard.writeText(url);
+  ElMessage.success('已复制 URL 到剪贴板');
+}
+
+function copySecret() {
+  if (form.webhook_secret) {
+    navigator.clipboard.writeText(form.webhook_secret);
+    ElMessage.success('已复制密钥到剪贴板');
+  }
 }
 
 function formatTrigger(row: ReviewPlanWithRelations): string {
@@ -354,6 +397,7 @@ onMounted(() => {
           <el-radio-group v-model="form.trigger_type">
             <el-radio value="interval">按间隔</el-radio>
             <el-radio value="daily">每天定时</el-radio>
+            <el-radio value="webhook">Webhook</el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item v-if="form.trigger_type === 'interval'" label="间隔时间">
@@ -374,6 +418,33 @@ onMounted(() => {
             placeholder="选择时间"
             style="width: 200px"
           />
+        </el-form-item>
+        <el-form-item v-if="form.trigger_type === 'webhook'" label="Webhook 密钥">
+          <div style="display: flex; align-items: center; gap: 8px">
+            <el-input
+              v-model="form.webhook_secret"
+              readonly
+              style="width: 250px"
+            />
+            <el-button size="small" @click="() => form.webhook_secret = generateRandomString()">重新生成</el-button>
+            <el-button size="small" @click="copySecret">复制</el-button>
+          </div>
+          <div style="color: #909399; font-size: 12px; margin-top: 4px; line-height: 1.4;">
+            系统已自动生成密钥，请复制并填入 Git 平台的 Webhook 设置中。
+          </div>
+        </el-form-item>
+        <el-form-item v-if="form.trigger_type === 'webhook' && editingId" label="Webhook URL">
+          <div style="display: flex; align-items: center; gap: 8px">
+            <el-input
+              :model-value="`${webhookBaseUrl}/${editingId}`"
+              readonly
+              style="width: 350px"
+            />
+            <el-button size="small" @click="copyWebhookUrl">复制</el-button>
+          </div>
+          <div style="color: #909399; font-size: 12px; margin-top: 4px; line-height: 1.4;">
+            将此 URL 配置到 Git 仓库的 webhook 设置中（推送或合并请求事件）。
+          </div>
         </el-form-item>
         <el-form-item label="启用状态">
           <el-switch v-model="form.enabled" :active-value="1" :inactive-value="0" />

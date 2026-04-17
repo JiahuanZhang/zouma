@@ -156,6 +156,8 @@ export interface DailyTriggerConfig {
 
 export interface WebhookTriggerConfig {
   secret?: string;
+  allowed_events?: string[];    // ['push', 'pull_request']
+  branch_filter?: string;       // 'main,release/*,feature/*'
 }
 
 export type TriggerConfig = IntervalTriggerConfig | DailyTriggerConfig | WebhookTriggerConfig;
@@ -388,5 +390,23 @@ export interface ReviewIssueRecord {
   line: number | null;
   description: string;
   suggestion: string;
+  created_at: string;
+}
+
+// ========== Webhook Log ==========
+
+export type WebhookLogStatus = 'accepted' | 'filtered' | 'rejected' | 'error';
+
+export interface WebhookLog {
+  id: number;
+  plan_id: number;
+  event_type: string | null;
+  branch: string | null;
+  source_ip: string | null;
+  user_agent: string | null;
+  payload_summary: string | null;
+  status: WebhookLogStatus;
+  message: string | null;
+  task_id: number | null;
   created_at: string;
 }

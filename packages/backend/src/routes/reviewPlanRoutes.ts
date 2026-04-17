@@ -9,3 +9,6 @@ reviewPlanRouter.post('/', ReviewPlanController.create);
 reviewPlanRouter.post('/:id/trigger', ReviewPlanController.trigger);
 reviewPlanRouter.put('/:id', ReviewPlanController.update);
 reviewPlanRouter.delete('/:id', ReviewPlanController.remove);
+
+// Git webhook 接收端点
+reviewPlanRouter.post('/webhook/:planId', ReviewPlanController.handleWebhook);

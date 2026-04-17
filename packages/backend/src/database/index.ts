@@ -251,4 +251,24 @@ export function initializeDatabase(): void {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_review_issues_task_id ON review_issues(task_id)
   `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS webhook_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      plan_id INTEGER NOT NULL REFERENCES review_plan(id) ON DELETE CASCADE,
+      event_type TEXT,
+      branch TEXT,
+      source_ip TEXT,
+      user_agent TEXT,
+      payload_summary TEXT,
+      status TEXT NOT NULL,
+      message TEXT,
+      task_id INTEGER,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_webhook_log_plan_id ON webhook_log(plan_id)
+  `);
 }

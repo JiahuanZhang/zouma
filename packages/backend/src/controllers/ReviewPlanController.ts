@@ -1,11 +1,14 @@
 import type { Request, Response } from 'express';
+import crypto from 'crypto';
 import type {
   CreateReviewPlanDTO,
   UpdateReviewPlanDTO,
   ReviewPlanTriggerType,
   TriggerConfig,
+  WebhookTriggerConfig,
+  WebhookLogStatus,
 } from '@zouma/common';
-import { ResponseHelper, Validator } from '@zouma/common';
+import { ResponseHelper, Validator, DatabaseManager } from '@zouma/common';
 import { ReviewPlanService } from '../services/ReviewPlanService.js';
 import { RepoNotReadyError } from '../services/GitRepoService.js';
 
@@ -27,6 +30,57 @@ function validateTriggerConfig(type: ReviewPlanTriggerType, config: TriggerConfi
   }
   // webhook 类型 config 可选（secret 可空）
   return null;
+}
+
+function extractBranchFromPayload(eventType: string | undefined, payload: unknown): string | null {
+  if (!eventType || !payload) return null;
+  const body = payload as Record<string, unknown>;
+
+  // push 事件: payload.ref = "refs/heads/main"
+  if (eventType === 'push' && body.ref) {
+    return (body.ref as string).replace('refs/heads/', '');
+  }
+  // pull_request 事件: payload.pull_request.base.ref
+  if (eventType === 'pull_request' && body.pull_request) {
+    const pr = body.pull_request as Record<string, unknown>;
+    return (pr.base as Record<string, unknown>)?.ref as string | null;
+  }
+  return null;
+}
+
+function matchBranchPattern(branch: string | null, patterns: string[]): boolean {
+  if (!branch) return false;
+  return patterns.some((p) => {
+    if (p.endsWith('*')) return branch.startsWith(p.slice(0, -1));
+    return branch === p;
+  });
+}
+
+function logWebhookCall(
+  planId: number,
+  eventType: string | null,
+  branch: string | null,
+  req: Request,
+  status: WebhookLogStatus,
+  message: string | null,
+  taskId: number | null = null
+): void {
+  const db = DatabaseManager.getDatabase();
+  const payload = JSON.stringify(req.body).slice(0, 500);
+  db.prepare(
+    `INSERT INTO webhook_log (plan_id, event_type, branch, source_ip, user_agent, payload_summary, status, message, task_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    planId,
+    eventType ?? null,
+    branch ?? null,
+    req.ip ?? null,
+    req.headers['user-agent'] ?? null,
+    payload,
+    status,
+    message ?? null,
+    taskId
+  );
 }
 
 export class ReviewPlanController {
@@ -149,5 +203,93 @@ export class ReviewPlanController {
       return;
     }
     res.json(ResponseHelper.success(result, '已触发评审任务'));
+  }
+
+  static handleWebhook(req: Request, res: Response): void {
+    const planId = Number(req.params.planId);
+    if (!Validator.isPositiveInteger(planId)) {
+      res.status(400).json(ResponseHelper.error('无效的计划 ID', 400));
+      return;
+    }
+
+    const plan = ReviewPlanService.findById(planId);
+    if (!plan) {
+      res.status(404).json(ResponseHelper.error('未找到评审计划', 404));
+      return;
+    }
+
+    if (plan.trigger_type !== 'webhook') {
+      res.status(400).json(ResponseHelper.error('该计划不是 webhook 触发类型', 400));
+      return;
+    }
+
+    const config = plan.trigger_config as WebhookTriggerConfig;
+    const eventType = req.headers['x-github-event'] as string | undefined;
+    const branch = extractBranchFromPayload(eventType, req.body);
+
+    // 签名验证
+    if (config.secret) {
+      const signature = req.headers['x-hub-signature-256'] as string | undefined;
+      if (!signature) {
+        logWebhookCall(planId, eventType ?? null, branch, req, 'rejected', '缺少签名头');
+        res.status(401).json(ResponseHelper.error('缺少签名头', 401));
+        return;
+      }
+
+      const payload = JSON.stringify(req.body);
+      const expectedSig = `sha256=${crypto
+        .createHmac('sha256', config.secret)
+        .update(payload)
+        .digest('hex')}`;
+
+      if (
+        signature.length !== expectedSig.length ||
+        !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSig))
+      ) {
+        logWebhookCall(planId, eventType ?? null, branch, req, 'rejected', '签名验证失败');
+        res.status(401).json(ResponseHelper.error('签名验证失败', 401));
+        return;
+      }
+    }
+
+    // 事件类型过滤
+    if (config.allowed_events?.length && eventType) {
+      if (!config.allowed_events.includes(eventType)) {
+        logWebhookCall(planId, eventType, branch, req, 'filtered', `事件类型 ${eventType} 不在允许列表`);
+        res.status(200).json(ResponseHelper.success(null, '事件类型不在允许列表，已忽略'));
+        return;
+      }
+    }
+
+    // 分支过滤
+    if (config.branch_filter) {
+      const allowedBranches = config.branch_filter.split(',').map((s) => s.trim());
+      if (!matchBranchPattern(branch, allowedBranches)) {
+        logWebhookCall(planId, eventType ?? null, branch, req, 'filtered', `分支 ${branch ?? '未知'} 不在过滤范围`);
+        res.status(200).json(ResponseHelper.success(null, '分支不在过滤范围，已忽略'));
+        return;
+      }
+    }
+
+    // 异步触发任务
+    try {
+      const result = ReviewPlanService.trigger(planId);
+      if (!result) {
+        logWebhookCall(planId, eventType ?? null, branch, req, 'error', '触发失败');
+        res.status(500).json(ResponseHelper.error('触发失败', 500));
+        return;
+      }
+      logWebhookCall(planId, eventType ?? null, branch, req, 'accepted', '任务已入队', result.taskId);
+      res.status(202).json(ResponseHelper.success({ taskId: result.taskId }, 'webhook 触发成功，任务已入队'));
+    } catch (err) {
+      if (err instanceof RepoNotReadyError) {
+        logWebhookCall(planId, eventType ?? null, branch, req, 'error', err.message);
+        res.status(400).json(ResponseHelper.error(err.message, 400));
+        return;
+      }
+      console.error('[Webhook] Trigger error:', err);
+      logWebhookCall(planId, eventType ?? null, branch, req, 'error', '触发评审任务失败');
+      res.status(500).json(ResponseHelper.error('触发评审任务失败', 500));
+    }
   }
 }
