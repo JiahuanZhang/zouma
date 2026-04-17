@@ -16,6 +16,8 @@ export function initializeDatabase(): void {
       status TEXT NOT NULL DEFAULT 'ready',
       status_message TEXT,
       description TEXT,
+      last_reviewed_commit TEXT,
+      last_reviewed_branch TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     )
@@ -30,6 +32,12 @@ export function initializeDatabase(): void {
   }
   if (!gitRepoColumns.some((c) => c.name === 'status_message')) {
     db.exec(`ALTER TABLE git_repo ADD COLUMN status_message TEXT`);
+  }
+  if (!gitRepoColumns.some((c) => c.name === 'last_reviewed_commit')) {
+    db.exec(`ALTER TABLE git_repo ADD COLUMN last_reviewed_commit TEXT`);
+  }
+  if (!gitRepoColumns.some((c) => c.name === 'last_reviewed_branch')) {
+    db.exec(`ALTER TABLE git_repo ADD COLUMN last_reviewed_branch TEXT`);
   }
   db.exec(`
     UPDATE git_repo
@@ -271,4 +279,34 @@ export function initializeDatabase(): void {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_webhook_log_plan_id ON webhook_log(plan_id)
   `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS git_repo_review_record (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      repo_id INTEGER NOT NULL REFERENCES git_repo(id) ON DELETE CASCADE,
+      branch TEXT NOT NULL,
+      last_commit TEXT NOT NULL,
+      reviewed_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_repo_review_record_branch ON git_repo_review_record(repo_id, branch)
+  `);
+
+  // 迁移：将 git_repo.last_reviewed_commit 迁移到 git_repo_review_record
+  const reposWithReview = db.prepare(
+    'SELECT id, last_reviewed_commit, last_reviewed_branch FROM git_repo WHERE last_reviewed_commit IS NOT NULL'
+  ).all() as { id: number; last_reviewed_commit: string; last_reviewed_branch: string | null }[];
+  for (const r of reposWithReview) {
+    const branch = r.last_reviewed_branch || 'unknown';
+    const existing = db.prepare(
+      'SELECT id FROM git_repo_review_record WHERE repo_id = ? AND branch = ?'
+    ).get(r.id, branch);
+    if (!existing) {
+      db.prepare(
+        'INSERT INTO git_repo_review_record (repo_id, branch, last_commit) VALUES (?, ?, ?)'
+      ).run(r.id, branch, r.last_reviewed_commit);
+    }
+  }
 }

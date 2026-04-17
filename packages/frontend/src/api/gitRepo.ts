@@ -4,6 +4,7 @@ import type {
   UpdateGitRepoDTO,
   PaginatedResult,
   DetectLocalRepoResult,
+  GitRepoReviewRecord,
 } from '@zouma/common';
 import { http } from './http';
 
@@ -18,6 +19,12 @@ export const gitRepoApi = {
   },
   getById(id: number) {
     return http.get<GitRepo>(`${BASE}/${id}`);
+  },
+  getDetail(id: number) {
+    return http.get<GitRepo & { review_records: GitRepoReviewRecord[] }>(`${BASE}/${id}/detail`);
+  },
+  getReviewRecords(id: number) {
+    return http.get<GitRepoReviewRecord[]>(`${BASE}/${id}/review-records`);
   },
   create(dto: CreateGitRepoDTO) {
     return http.post<GitRepo>(BASE, dto);

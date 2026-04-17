@@ -31,6 +31,36 @@ export class GitRepoController {
     res.json(ResponseHelper.success(item));
   }
 
+  static getDetail(req: Request, res: Response): void {
+    const id = Number(req.params.id);
+    if (!Validator.isPositiveInteger(id)) {
+      res.status(400).json(ResponseHelper.error('无效的 ID', 400));
+      return;
+    }
+    const repo = GitRepoService.findById(id);
+    if (!repo) {
+      res.status(404).json(ResponseHelper.error('未找到记录', 404));
+      return;
+    }
+    const reviewRecords = GitRepoService.findReviewRecords(id);
+    res.json(ResponseHelper.success({ ...repo, review_records: reviewRecords }));
+  }
+
+  static getReviewRecords(req: Request, res: Response): void {
+    const id = Number(req.params.id);
+    if (!Validator.isPositiveInteger(id)) {
+      res.status(400).json(ResponseHelper.error('无效的 ID', 400));
+      return;
+    }
+    const repo = GitRepoService.findById(id);
+    if (!repo) {
+      res.status(404).json(ResponseHelper.error('未找到记录', 404));
+      return;
+    }
+    const records = GitRepoService.findReviewRecords(id);
+    res.json(ResponseHelper.success(records));
+  }
+
   static create(req: Request, res: Response): void {
     const dto = req.body as CreateGitRepoDTO;
     if (!Validator.isNonEmptyString(dto.name)) {

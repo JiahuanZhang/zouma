@@ -29,6 +29,8 @@ export interface GitRepo {
   status: GitRepoStatus;
   status_message: string | null;
   description: string | null;
+  last_reviewed_commit: string | null;
+  last_reviewed_branch: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -410,3 +412,14 @@ export interface WebhookLog {
   task_id: number | null;
   created_at: string;
 }
+
+// ========== Git Repo Review Record ==========
+
+export interface GitRepoReviewRecord {
+  id: number;
+  repo_id: number;
+  branch: string;
+  last_commit: string;
+  reviewed_at: string;
+}
+

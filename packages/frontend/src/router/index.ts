@@ -17,6 +17,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/GitRepoView.vue'),
       },
       {
+        path: 'git-repos/:id',
+        name: 'GitRepoDetail',
+        component: () => import('@/views/GitRepoDetailView.vue'),
+        props: true,
+      },
+      {
         path: 'llm-configs',
         name: 'LlmConfigs',
         component: () => import('@/views/LlmConfigView.vue'),

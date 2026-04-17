@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue';
+import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { ArrowDown, FolderOpened } from '@element-plus/icons-vue';
 import type { FormInstance } from 'element-plus';
@@ -7,6 +8,7 @@ import type { GitRepo, CreateGitRepoDTO } from '@zouma/common';
 import { gitRepoApi } from '@/api/gitRepo';
 import { systemApi } from '@/api/system';
 
+const router = useRouter();
 const loading = ref(false);
 const tableData = ref<GitRepo[]>([]);
 const total = ref(0);
@@ -306,9 +308,23 @@ onMounted(fetchData);
       </el-table-column>
       <el-table-column prop="local_path" label="本地路径" min-width="180" show-overflow-tooltip />
       <el-table-column prop="description" label="描述" min-width="120" show-overflow-tooltip />
-      <el-table-column prop="created_at" label="创建时间" width="170" />
-      <el-table-column label="操作" width="150" fixed="right">
+      <el-table-column label="上次评审" min-width="160">
         <template #default="{ row }">
+          <template v-if="row.last_reviewed_commit">
+            <el-tooltip :content="row.last_reviewed_commit" placement="top">
+              <span class="review-commit">{{ row.last_reviewed_commit.slice(0, 8) }}</span>
+            </el-tooltip>
+            <el-tag v-if="row.last_reviewed_branch" size="small" type="info" style="margin-left: 6px">
+              {{ row.last_reviewed_branch }}
+            </el-tag>
+          </template>
+          <span v-else class="text-muted">暂无</span>
+        </template>
+      </el-table-column>
+      <el-table-column prop="created_at" label="创建时间" width="170" />
+      <el-table-column label="操作" width="200" fixed="right">
+        <template #default="{ row }">
+          <el-button size="small" type="primary" plain @click="router.push({ name: 'GitRepoDetail', params: { id: row.id } })">详情</el-button>
           <el-button size="small" @click="handleEdit(row)">编辑</el-button>
           <el-button size="small" type="danger" @click="handleDelete(row)">删除</el-button>
         </template>
@@ -502,5 +518,17 @@ onMounted(fetchData);
   padding: 40px;
   color: #909399;
   font-size: 14px;
+}
+
+.review-commit {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 13px;
+  color: #409eff;
+  cursor: pointer;
+}
+
+.text-muted {
+  color: #c0c4cc;
+  font-size: 13px;
 }
 </style>

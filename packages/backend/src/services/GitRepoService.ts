@@ -5,6 +5,7 @@ import type {
   UpdateGitRepoDTO,
   PaginationParams,
   DetectLocalRepoResult,
+  GitRepoReviewRecord,
 } from '@zouma/common';
 import { DatabaseManager } from '../database/index.js';
 import { execSync, spawn } from 'child_process';
@@ -166,6 +167,13 @@ export class GitRepoService {
       branch,
       local_path: resolved,
     };
+  }
+
+  static findReviewRecords(repoId: number): GitRepoReviewRecord[] {
+    const db = DatabaseManager.getDatabase();
+    return db
+      .prepare('SELECT * FROM git_repo_review_record WHERE repo_id = ? ORDER BY reviewed_at DESC')
+      .all(repoId) as GitRepoReviewRecord[];
   }
 
   static assertRepoReadyForReview(repoId: number): GitRepo {
