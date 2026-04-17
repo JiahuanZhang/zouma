@@ -19,23 +19,31 @@ import { DatabaseManager } from '../database/index.js';
 import { GitRepoService } from './GitRepoService.js';
 
 export class ReviewTaskService {
-  static findAll(params?: PaginationParams): { items: ReviewTaskWithRelations[]; total: number } {
+  static findAll(params?: PaginationParams & { planId?: number }): { items: ReviewTaskWithRelations[]; total: number } {
     const db = DatabaseManager.getDatabase();
-    const total = (
-      db.prepare('SELECT COUNT(*) as count FROM review_task').get() as { count: number }
-    ).count;
+    
+    let baseSql = 'FROM review_task';
+    const queryParams: unknown[] = [];
+    
+    if (params?.planId) {
+      baseSql += ' WHERE plan_id = ?';
+      queryParams.push(params.planId);
+    }
 
-    if (params) {
+    const totalRes = db.prepare(`SELECT COUNT(*) as count ${baseSql}`).get(...queryParams) as { count: number };
+    const total = totalRes.count;
+
+    if (params && params.page && params.pageSize) {
       const offset = (params.page - 1) * params.pageSize;
       const items = db
-        .prepare('SELECT * FROM review_task ORDER BY id DESC LIMIT ? OFFSET ?')
-        .all(params.pageSize, offset) as ReviewTaskWithRelations[];
+        .prepare(`SELECT * ${baseSql} ORDER BY id DESC LIMIT ? OFFSET ?`)
+        .all(...queryParams, params.pageSize, offset) as ReviewTaskWithRelations[];
       return { items, total };
     }
 
     const items = db
-      .prepare('SELECT * FROM review_task ORDER BY id DESC')
-      .all() as ReviewTaskWithRelations[];
+      .prepare(`SELECT * ${baseSql} ORDER BY id DESC`)
+      .all(...queryParams) as ReviewTaskWithRelations[];
     return { items, total };
   }
 

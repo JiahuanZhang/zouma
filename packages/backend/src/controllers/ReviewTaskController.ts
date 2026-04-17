@@ -8,12 +8,13 @@ export class ReviewTaskController {
   static getAll(req: Request, res: Response): void {
     const page = Number(req.query.page) || 0;
     const pageSize = Number(req.query.pageSize) || 0;
+    const planId = req.query.planId ? Number(req.query.planId) : undefined;
 
     if (page > 0 && pageSize > 0) {
-      const { items, total } = ReviewTaskService.findAll({ page, pageSize });
+      const { items, total } = ReviewTaskService.findAll({ page, pageSize, planId });
       res.json(ResponseHelper.paginated(items, total, { page, pageSize }));
     } else {
-      const { items } = ReviewTaskService.findAll();
+      const { items } = ReviewTaskService.findAll({ planId } as any);
       res.json(ResponseHelper.success(items));
     }
   }

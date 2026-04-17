@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue';
+import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance } from 'element-plus';
 import type {
@@ -17,6 +18,8 @@ import { reviewPlanApi } from '@/api/reviewPlan';
 import { gitRepoApi } from '@/api/gitRepo';
 import { llmConfigApi } from '@/api/llmConfig';
 import { fileFilterApi } from '@/api/fileFilter';
+
+const router = useRouter();
 
 const loading = ref(false);
 const tableData = ref<ReviewPlanWithRelations[]>([]);
@@ -174,23 +177,8 @@ function handleAdd() {
   dialogVisible.value = true;
 }
 
-function handleEdit(row: ReviewPlanWithRelations) {
-  editingId.value = row.id;
-  dialogTitle.value = '编辑评审计划';
-  const { interval_hours, daily_time, webhook_secret } = extractTriggerConfig(row);
-  Object.assign(form, {
-    name: row.name,
-    repo_id: row.repo_id,
-    llm_config_id: row.llm_config_id,
-    target_branch: row.target_branch ?? '',
-    file_filter_id: row.file_filter_id ?? null,
-    trigger_type: row.trigger_type,
-    interval_hours,
-    daily_time,
-    webhook_secret: webhook_secret || generateRandomString(),
-    enabled: row.enabled,
-  });
-  dialogVisible.value = true;
+function handleDetail(row: ReviewPlanWithRelations) {
+  router.push({ name: 'ReviewPlanDetail', params: { id: row.id } });
 }
 
 async function handleSubmit() {
@@ -337,7 +325,7 @@ onMounted(() => {
           <el-button size="small" @click="handleToggleEnabled(row)">
             {{ row.enabled ? '停用' : '启用' }}
           </el-button>
-          <el-button size="small" @click="handleEdit(row)">编辑</el-button>
+          <el-button size="small" @click="handleDetail(row)">详情</el-button>
           <el-button size="small" type="danger" @click="handleDelete(row)">删除</el-button>
         </template>
       </el-table-column>

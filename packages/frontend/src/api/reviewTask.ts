@@ -15,10 +15,10 @@ export const reviewTaskApi = {
   getAll() {
     return http.get<ReviewTaskWithRelations[]>(BASE);
   },
-  getPage(page: number, pageSize: number) {
-    return http.get<PaginatedResult<ReviewTaskWithRelations>>(
-      `${BASE}?page=${page}&pageSize=${pageSize}`
-    );
+  getPage(page: number, pageSize: number, planId?: number) {
+    let url = `${BASE}?page=${page}&pageSize=${pageSize}`;
+    if (planId) url += `&planId=${planId}`;
+    return http.get<PaginatedResult<ReviewTaskWithRelations>>(url);
   },
   getById(id: number) {
     return http.get<ReviewTaskWithRelations>(`${BASE}/${id}`);
